@@ -104,14 +104,14 @@ button{cursor:pointer}
 #suivi.vivant::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--rubrique);animation:pouls 1.2s ease-in-out infinite;transform:translateY(-1px)}
 @keyframes pouls{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){#suivi.vivant::before{animation:none}}
-:is(#connexion,#changer){margin:16px 0 0;padding:14px 16px 16px;border:1.5px solid var(--encre);font-size:15px}
-:is(#connexion,#changer) h2{font-family:var(--titre);font-size:18px;margin:0 0 8px}
-:is(#connexion,#changer) ol{margin:0 0 12px;padding-left:20px}
-:is(#connexion,#changer) li{margin:3px 0}
-:is(#connexion,#changer) .note{font-size:13px;color:var(--gris);margin:8px 0 0}
-:is(#connexion,#changer) .rang{display:flex;gap:8px;flex-wrap:wrap}
-:is(#connexion,#changer) .rang .champ{flex:1 1 220px}
-:is(#connexion,#changer) .plein{padding:8px 14px;font-size:15px}
+:is(#connexion,#changer,#eleves){margin:16px 0 0;padding:14px 16px 16px;border:1.5px solid var(--encre);font-size:15px}
+:is(#connexion,#changer,#eleves) h2{font-family:var(--titre);font-size:18px;margin:0 0 8px}
+:is(#connexion,#changer,#eleves) ol{margin:0 0 12px;padding-left:20px}
+:is(#connexion,#changer,#eleves) li{margin:3px 0}
+:is(#connexion,#changer,#eleves) .note{font-size:13px;color:var(--gris);margin:8px 0 0}
+:is(#connexion,#changer,#eleves) .rang{display:flex;gap:8px;flex-wrap:wrap}
+:is(#connexion,#changer,#eleves) .rang .champ{flex:1 1 220px}
+:is(#connexion,#changer,#eleves) .plein{padding:8px 14px;font-size:15px}
 .champ{width:100%;border:0;border-bottom:1.5px solid var(--encre);border-radius:0;background:none;padding:8px 2px;font-size:17px}
 .champ::placeholder{color:var(--pale)}
 .champ:focus-visible{outline:0;border-bottom-width:3px;padding-bottom:6.5px}
@@ -138,6 +138,10 @@ button{cursor:pointer}
 #fiche section{margin:26px 0 0;padding-top:14px;border-top:1px solid var(--encre)}
 #fiche h2{font-family:var(--titre);font-weight:700;font-size:19px;margin:0 0 4px}
 #fiche section p{margin:0 0 12px;color:var(--gris);font-size:15px;max-width:60ch}
+#liste-eleves .eleve{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;border-bottom:1px solid var(--filet);padding:10px 2px}
+#liste-eleves .eleve b{flex:1;font-weight:600;min-width:8ch}
+#liste-eleves .eleve button{background:none;border:0;padding:0;font:inherit;color:var(--encre);text-decoration:underline;cursor:pointer}
+#liste-eleves .eleve button.retirer{color:var(--rubrique)}
 #playlists-connues button{display:flex;width:100%;align-items:baseline;gap:10px;text-align:left;background:none;border:0;border-bottom:1px solid var(--filet);padding:10px 2px;font:inherit;color:inherit;cursor:pointer}
 #playlists-connues button b{flex:1;font-weight:600}
 #playlists-connues button span{color:var(--gris);font-size:14px;white-space:nowrap}
@@ -191,8 +195,8 @@ body[data-h=surligneurs]{background-image:repeating-linear-gradient(0deg,transpa
 
 /* les écritures n'ont qu'une graisse : la hiérarchie passe par la taille et la couleur */
 b,strong,dd,.plein,.creux,#depot,#message,#etapes li.ici,.ligne .t b,#choix-titre{font-weight:400!important}
-.tete h1,#fiche h1,#fiche h2,:is(#connexion,#changer) h2,#entete h1,#entete .artiste{font-weight:var(--graisse-titre,400)!important}
-#fiche h2,:is(#connexion,#changer) h2{font-size:26px;line-height:1.1}
+.tete h1,#fiche h1,#fiche h2,:is(#connexion,#changer,#eleves) h2,#entete h1,#entete .artiste{font-weight:var(--graisse-titre,400)!important}
+#fiche h2,:is(#connexion,#changer,#eleves) h2{font-size:26px;line-height:1.1}
 :focus-visible{outline-color:var(--encre)}
 input[type=checkbox]{accent-color:var(--encre)!important}
 
@@ -239,7 +243,7 @@ body[data-h=ecolier] .num{font-family:var(--texte);font-size:9px;color:var(--tou
 body[data-h=ecolier] #legende{font-size:11.5px;line-height:1.8}
 body[data-h=ecolier] #appli,body[data-h=ecolier] #fiche{zoom:.86}
 body[data-h=ecolier] .tete h1,body[data-h=ecolier] #fiche h1{font-size:30px;line-height:1.6}
-body[data-h=ecolier] #fiche h2,body[data-h=ecolier] :is(#connexion,#changer) h2{font-size:20px;line-height:1.8}
+body[data-h=ecolier] #fiche h2,body[data-h=ecolier] :is(#connexion,#changer,#eleves) h2{font-size:20px;line-height:1.8}
 body[data-h=ecolier] #f-sous{margin-top:.5em;line-height:1.8}
 body[data-h=ecolier] #fiche section p,body[data-h=ecolier] #depot small{line-height:1.7}
 
@@ -301,6 +305,7 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
   <header class="tete"><h1>Ma playlist</h1>
     <div class="actions"><button class="lien" id="b-playlist" title="Relire la playlist sur YouTube Music">Relire la playlist</button>
     <button class="lien" id="b-changer">Changer de playlist</button>
+    <button class="lien" id="b-eleves" hidden>Élèves</button>
     <button class="lien" id="b-cle">Clé d'accès</button></div></header>
   <div id="suivi" role="status"></div>
   <section id="changer" hidden>
@@ -315,6 +320,14 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
     <div class="rang"><input class="champ" id="lien-playlist" type="url" placeholder="https://music.youtube.com/playlist?list=…" autocomplete="off" aria-label="Lien de la playlist">
     <button class="plein" id="b-changer-ok">Utiliser cette playlist</button></div>
     <p class="note">Les partitions déjà faites sont conservées. La liste des titres est remplacée en une à deux minutes.</p>
+  </section>
+  <section id="eleves" hidden>
+    <h2>Mes élèves</h2>
+    <p class="note" style="margin:0 0 8px">Chaque élève reçoit un lien personnel. Il y choisit sa propre playlist et lance ses analyses (10 par jour au plus) ; les partitions faites sont communes à tous. Retirer un élève coupe son accès.</p>
+    <div id="liste-eleves"></div>
+    <div class="rang" style="margin-top:12px"><input class="champ" id="prenom-eleve" placeholder="Prénom du nouvel élève" autocomplete="off" aria-label="Prénom du nouvel élève">
+    <button class="plein" id="b-eleve-ok">Ajouter</button></div>
+    <p id="note-eleves" class="note"></p>
   </section>
   <section id="connexion" hidden>
     <h2>Relier cette page au dépôt GitHub</h2>
@@ -656,16 +669,23 @@ if (document.fonts) Promise.all([...document.fonts].map(f => f.load().catch(() =
 
 
 /* ------------------------------------------------------------------ application « Ma playlist » */
-const DEPOT = "romaingaudet-maker/partitions-", BRANCHE = "main", API = "https://api.github.com/repos/" + DEPOT;
+const DEPOT = "romaingaudet-maker/partitions-", BRANCHE = "main", RELAIS = "";
+/* Un élève arrive par un lien personnel (…?code=…) : son code est gardé dans le navigateur et retiré de l'adresse.
+   La page parle alors au relais, qui garde la clé GitHub, au lieu de parler à GitHub. */
+{ const c = new URLSearchParams(location.search).get("code");
+  if (c){ try { localStorage.setItem("partitions.code", c.trim()); localStorage.removeItem("partitions.cle"); } catch (e) {} history.replaceState(null, "", location.pathname); } }
+const ELEVE = (() => { try { return (!localStorage.getItem("partitions.cle") && localStorage.getItem("partitions.code")) || ""; } catch (e) { return ""; } })();
+const API = ELEVE ? RELAIS : "https://api.github.com/repos/" + DEPOT;
 let playlist = [], bilan = {}, enAttente = new Set(), choisi = null, minuteur = null, origine = "appli";
 const lire = k => { try { return localStorage.getItem("partitions." + k) || ""; } catch (e) { return ""; } };
 const ecrire = (k, v) => { try { localStorage.setItem("partitions." + k, v); } catch (e) {} };
 
 async function api(chemin, options = {}){
-  const r = await fetch(chemin.startsWith("http") ? chemin : API + chemin, {...options, headers: {
-    "Authorization": "Bearer " + lire("cle"), "X-GitHub-Api-Version": "2022-11-28",
-    "Accept": options.brut ? "application/vnd.github.raw+json" : "application/vnd.github+json", ...(options.headers || {})}});
-  if (r.status === 401){ $("connexion").hidden = false; throw new Error("Clé d'accès refusée par GitHub."); }
+  const entetes = {"X-GitHub-Api-Version": "2022-11-28", "Accept": options.brut ? "application/vnd.github.raw+json" : "application/vnd.github+json", ...(options.headers || {})};
+  if (ELEVE) entetes["X-Code"] = ELEVE; else entetes["Authorization"] = "Bearer " + lire("cle");
+  if (ELEVE && options.body) entetes["Content-Type"] = "application/json";
+  const r = await fetch(chemin.startsWith("http") ? chemin : API + chemin, {...options, headers: entetes});
+  if (r.status === 401){ if (ELEVE) throw new Error("Ce lien d'élève n'est plus valable : demande-en un nouveau."); $("connexion").hidden = false; throw new Error("Clé d'accès refusée par GitHub."); }
   return r;
 }
 async function fichierJson(chemin){
@@ -712,6 +732,7 @@ function dessinerListe(){
   if (playlist.length && !n) liste.append(el("p", null, pretes && !$("filtre").value ? "Aucune partition prête pour l'instant : choisis un titre pour lancer son analyse." : "Aucun titre ne correspond."));
   $("compte").textContent = playlist.length ? playlist.length + " titres, dont " + faits + (faits > 1 ? " avec partition complète" : " avec partition complète")
       + (n > 400 ? ". Les 400 premiers sont affichés, affine la recherche." : "")
+    : ELEVE ? "Aucune playlist pour l'instant : touche « Changer de playlist » et colle le lien de la tienne."
     : lire("cle") ? "Playlist pas encore lue : touche « Relire la playlist », puis patiente une minute." : "";
 }
 
@@ -793,6 +814,7 @@ async function demander(){
     const deja = await api(chemin + "?ref=" + BRANCHE, {cache: "no-store"});
     if (deja.ok) corps.sha = (await deja.json()).sha;
     const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
+    if (r.status === 429) throw new Error((await r.json()).message || "limite du jour atteinte");
     if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
     enAttente.add(id); attendu = id;
     if (bilan[id] && bilan[id].etat !== "ok") delete bilan[id];       /* l'échec précédent n'est plus d'actualité */
@@ -877,7 +899,7 @@ async function rafraichir(){
   } catch (e) {}
 }
 async function charger(avecSuivi = true){
-  if (!lire("cle")){ $("connexion").hidden = false; dessinerListe(); return; }
+  if (!lire("cle") && !ELEVE){ $("connexion").hidden = false; dessinerListe(); return; }
   try {
     const dossier = nom => api("/contents/" + nom + "?ref=" + BRANCHE, {cache: "no-store"}).then(r => r.ok ? r.json() : []);
     const [pl, bi, au, de] = await Promise.all([fichierJson("playlist.json"), fichierJson("resultats/bilan.json"), dossier("audio"), dossier("demandes")]);
@@ -895,7 +917,7 @@ $("b-cle").onclick = () => { $("connexion").hidden = !$("connexion").hidden; if 
 $("b-cle-ok").onclick = () => { ecrire("cle", $("cle").value.trim()); $("cle").value = ""; charger(); };
 $("b-playlist").onclick = async () => {
   const r = await api("/actions/workflows/playlist.yml/dispatches", {method: "POST", body: JSON.stringify({ref: BRANCHE})}).catch(e => null);
-  $("suivi").textContent = r && r.ok ? "Lecture de la playlist demandée…" : "GitHub a refusé la demande : la clé a-t-elle le droit « Actions » en écriture ?";
+  $("suivi").textContent = r && r.ok ? "Lecture de la playlist demandée…" : (ELEVE ? "La relecture a été refusée." : "GitHub a refusé la demande : la clé a-t-elle le droit « Actions » en écriture ?");
   $("suivi").classList.add("actif"); window.attendPlaylist = true; setTimeout(() => suivre(false), 6000);
 };
 /* Changer de playlist : le lien est écrit dans essai/playlist.txt, ce qui relance la lecture de la playlist. */
@@ -945,6 +967,47 @@ $("b-changer-ok").onclick = async () => {
     $("changer").hidden = true; $("lien-playlist").value = "";
     dire("Playlist enregistrée : sa lecture démarre, la liste des titres sera remplacée dans une à deux minutes.");
   } catch (e) { dire("La playlist n'a pas pu être enregistrée : " + e.message, true); }
+};
+/* Élèves : le répertoire (eleves.json, dans le dépôt privé) donne à chacun un identifiant et un code personnel. */
+if (ELEVE){ $("b-cle").hidden = true; api("/moi").then(r => r.ok ? r.json() : null).then(m => { if (m) document.querySelector(".tete h1").textContent = "Playlist de " + m.prenom; }).catch(() => {}); }
+else if (lire("cle")) $("b-eleves").hidden = false;
+let repertoire = {eleves: []};
+const lienEleve = e => location.origin + location.pathname + "?code=" + encodeURIComponent(e.code);
+function nouveauCode(){ const a = "abcdefghjkmnpqrstuvwxyz23456789", o = crypto.getRandomValues(new Uint8Array(12)); return [...o].map((x, i) => (i && i % 4 === 0 ? "-" : "") + a[x % a.length]).join(""); }
+async function ecrireEleves(message){
+  const chemin = "/contents/eleves.json", corps = {message, branch: BRANCHE, content: enBase64(new TextEncoder().encode(JSON.stringify(repertoire, null, 1)))};
+  const deja = await api(chemin + "?ref=" + BRANCHE, {cache: "no-store"});
+  if (deja.ok) corps.sha = (await deja.json()).sha;
+  const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
+  if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
+}
+function dessinerEleves(){
+  const zone = $("liste-eleves"); zone.replaceChildren();
+  for (const e of repertoire.eleves){
+    const l = el("div", "eleve"), partager = el("button", null, navigator.share ? "Envoyer son lien" : "Copier son lien"), retirer = el("button", "retirer", "Retirer");
+    partager.onclick = async () => { try { if (navigator.share) await navigator.share({title: "Tes partitions", text: e.prenom + ", voici ton accès personnel aux partitions :", url: lienEleve(e)}); else { await navigator.clipboard.writeText(lienEleve(e)); $("note-eleves").textContent = "Lien de " + e.prenom + " copié."; } } catch (x) {} };
+    retirer.onclick = async () => { const avant = repertoire.eleves; repertoire.eleves = avant.filter(x => x !== e);
+      try { await ecrireEleves("Élève retiré : " + e.prenom); dessinerEleves(); $("note-eleves").textContent = e.prenom + " n'a plus accès (effectif en une minute)."; } catch (x) { repertoire.eleves = avant; $("note-eleves").textContent = "Échec : " + x.message; } };
+    l.append(el("b", null, e.prenom), partager, retirer); zone.append(l);
+  }
+  if (!repertoire.eleves.length) zone.append(el("p", "note", "Aucun élève pour l'instant."));
+}
+$("b-eleves").onclick = async () => {
+  $("eleves").hidden = !$("eleves").hidden;
+  if ($("eleves").hidden) return;
+  $("note-eleves").textContent = RELAIS ? "" : "Le relais n'est pas encore installé : les liens ne fonctionneront qu'ensuite.";
+  try { const d = await fichierJson("eleves.json"); repertoire = d && Array.isArray(d.eleves) ? d : {eleves: []}; } catch (e) {}
+  dessinerEleves();
+};
+$("b-eleve-ok").onclick = async () => {
+  const prenom = $("prenom-eleve").value.trim().slice(0, 40);
+  if (!prenom){ $("note-eleves").textContent = "Indique un prénom."; return; }
+  let id = identifiant(prenom).slice(0, 30), n = 2; const pris = new Set(repertoire.eleves.map(e => e.id));
+  while (pris.has(id)) id = identifiant(prenom).slice(0, 30) + "-" + n++;
+  const e = {id, prenom, code: nouveauCode(), ajoute_le: new Date().toISOString().slice(0, 10)};
+  repertoire.eleves.push(e);
+  try { await ecrireEleves("Nouvel élève : " + prenom); $("prenom-eleve").value = ""; dessinerEleves(); $("note-eleves").textContent = prenom + " ajouté. Envoie-lui son lien ; il fonctionne une minute plus tard."; }
+  catch (x) { repertoire.eleves.pop(); $("note-eleves").textContent = "Échec : " + x.message; }
 };
 $("b-retour").onclick = () => { vue("appli"); dessinerListe(); };
 $("f-artiste").oninput = $("f-titre").oninput = majFiche;
