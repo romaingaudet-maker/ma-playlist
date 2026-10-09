@@ -343,12 +343,6 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
     <div class="boutons"><button class="plein" id="b-ecouter">Écouter et analyser</button>
     <button class="creux" id="b-arreter" hidden>Arrêter l'écoute et analyser</button></div>
   </section>
-  <details id="grille-fournie"><summary>Aider l'analyse avec une grille d'accords trouvée ailleurs</summary>
-    <p class="note" style="margin:8px 0">Colle ici les accords du morceau tels que tu les trouves sur un site de grilles (notation Do Ré Mi ou C D E, peu importe le ton). Seuls les accords sont gardés, pas les paroles. Ils servent d'indice : l'analyse les favorise s'ils ressemblent à ce qu'elle entend, et les ignore sinon.</p>
-    <textarea class="champ" id="g-texte" rows="5" placeholder="Si  Mi  Fa#  Sol#m  Do#m …" aria-label="Grille d'accords" style="width:100%;font-family:inherit"></textarea>
-    <p id="g-lu" class="note" style="margin:6px 0"></p>
-    <button class="plein" id="b-grille">Enregistrer et refaire l'analyse</button>
-  </details>
   <details id="noms"><summary>Corriger l'artiste ou le titre (ils servent à retrouver les paroles)</summary>
     <label for="f-artiste">Artiste</label><input class="champ" id="f-artiste">
     <label for="f-titre">Titre</label><input class="champ" id="f-titre">
@@ -920,32 +914,6 @@ $("b-changer-ok").onclick = async () => {
     dire("Playlist enregistrée : sa lecture démarre, la liste des titres sera remplacée dans une à deux minutes.");
     window.attendPlaylist = true; setTimeout(() => suivre(false), 6000);
   } catch (e) { dire("La playlist n'a pas pu être enregistrée : " + e.message, true); }
-};
-/* Grille d'accords fournie : on ne garde que les accords (lignes faites surtout d'accords), jamais les paroles. */
-const ACCORD = /^(?:[A-G](?:#|b|♯|♭)?|(?:Do|Ré|Re|Mi|Fa|Sol|La|Si)(?:#|b|♯|♭)?)(?:m|min|maj|M|dim|aug|sus|add|°|\+|[0-9])*(?:\/(?:[A-G]|Do|Ré|Re|Mi|Fa|Sol|La|Si)(?:#|b|♯|♭)?)?$/;
-function accordsDe(texte){
-  const garde = [];
-  for (const ligne of texte.split(/\n/)){
-    const jetons = ligne.split(/[\s|,;\-–—()\[\]]+/).filter(Boolean);
-    const bons = jetons.filter(j => ACCORD.test(j));
-    if (bons.length && bons.length >= 0.6 * jetons.length) garde.push(...bons);
-  }
-  return garde.slice(0, 600);
-}
-$("g-texte").oninput = () => { const a = accordsDe($("g-texte").value); $("g-lu").textContent = a.length ? a.length + " accords reconnus : " + [...new Set(a)].slice(0, 14).join(", ") + (new Set(a).size > 14 ? "…" : "") : ""; };
-$("b-grille").onclick = async () => {
-  const accords = accordsDe($("g-texte").value), id = idDe($("f-artiste").value, $("f-titre").value), chemin = "/contents/grilles/" + id + ".json";
-  if (accords.length < 3){ dire("Je n'ai pas reconnu d'accords dans ce texte (il en faut au moins trois).", true); return; }
-  try {
-    dire("Enregistrement de la grille…");
-    const corps = {message: "Grille fournie : " + $("f-titre").value, branch: BRANCHE, content: enBase64(new TextEncoder().encode(JSON.stringify({accords, ajoutee_le: new Date().toISOString()})))};
-    const deja = await api(chemin + "?ref=" + BRANCHE);
-    if (deja.ok) corps.sha = (await deja.json()).sha;
-    const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
-    if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
-    $("grille-fournie").open = false; $("g-texte").value = ""; $("g-lu").textContent = "";
-    await demander();
-  } catch (e) { dire("La grille n'a pas pu être enregistrée : " + e.message, true); }
 };
 $("b-retour").onclick = () => { vue("appli"); dessinerListe(); };
 $("f-artiste").oninput = $("f-titre").oninput = majFiche;
