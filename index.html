@@ -140,6 +140,16 @@ button{cursor:pointer}
 #fiche section p{margin:0 0 12px;color:var(--gris);font-size:15px;max-width:60ch}
 #liste-eleves .eleve{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;border-bottom:1px solid var(--filet);padding:10px 2px}
 #liste-eleves .eleve b{flex:1;font-weight:600;min-width:8ch}
+#liste-eleves .eleve label{font-size:14px;color:var(--gris)}
+#liste-eleves .eleve input{width:3.2em;font:inherit;border:0;border-bottom:1.5px solid var(--encre);background:none;color:inherit;text-align:center;padding:0}
+#stats{margin-top:14px;font-size:15px}
+#stats h3{font-family:var(--titre);font-size:17px;margin:16px 0 4px}
+#stats p{margin:3px 0}
+#stats .mince{color:var(--gris);font-size:14px}
+#stats ol{margin:4px 0 0;padding-left:22px}
+#stats details{border-bottom:1px solid var(--filet);padding:8px 0}
+#stats summary{cursor:pointer;font-weight:600}
+#eleves #b-stats{margin-top:12px}
 #liste-eleves .eleve button{background:none;border:0;padding:0;font:inherit;color:var(--encre);text-decoration:underline;cursor:pointer}
 #liste-eleves .eleve button.retirer{color:var(--rubrique)}
 #playlists-connues button{display:flex;width:100%;align-items:baseline;gap:10px;text-align:left;background:none;border:0;border-bottom:1px solid var(--filet);padding:10px 2px;font:inherit;color:inherit;cursor:pointer}
@@ -307,6 +317,7 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
     <button class="lien" id="b-changer">Changer de playlist</button>
     <button class="lien" id="b-eleves" hidden>Élèves</button>
     <button class="lien" id="b-cle">Clé d'accès</button></div></header>
+  <p id="avis-eleve" class="note" hidden style="margin:6px 0 0">Ton professeur peut voir ta playlist et les titres que tu analyses.</p>
   <div id="suivi" role="status"></div>
   <section id="changer" hidden>
     <h2>Mes playlists</h2>
@@ -328,6 +339,8 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
     <div class="rang" style="margin-top:12px"><input class="champ" id="prenom-eleve" placeholder="Prénom du nouvel élève" autocomplete="off" aria-label="Prénom du nouvel élève">
     <button class="plein" id="b-eleve-ok">Ajouter</button></div>
     <p id="note-eleves" class="note"></p>
+    <button class="creux" id="b-stats">Voir leurs playlists et ce qu'ils aiment</button>
+    <div id="stats" hidden></div>
   </section>
   <section id="connexion" hidden>
     <h2>Relier cette page au dépôt GitHub</h2>
@@ -969,7 +982,7 @@ $("b-changer-ok").onclick = async () => {
   } catch (e) { dire("La playlist n'a pas pu être enregistrée : " + e.message, true); }
 };
 /* Élèves : le répertoire (eleves.json, dans le dépôt privé) donne à chacun un identifiant et un code personnel. */
-if (ELEVE){ $("b-cle").hidden = true; api("/moi").then(r => r.ok ? r.json() : null).then(m => { if (m) document.querySelector(".tete h1").textContent = "Playlist de " + m.prenom; }).catch(() => {}); }
+if (ELEVE){ $("b-cle").hidden = true; $("avis-eleve").hidden = false; api("/moi").then(r => r.ok ? r.json() : null).then(m => { if (m) document.querySelector(".tete h1").textContent = "Playlist de " + m.prenom; }).catch(() => {}); }
 else if (lire("cle")) $("b-eleves").hidden = false;
 let repertoire = {eleves: []};
 const lienEleve = e => location.origin + location.pathname + "?code=" + encodeURIComponent(e.code);
@@ -988,7 +1001,11 @@ function dessinerEleves(){
     partager.onclick = async () => { try { if (navigator.share) await navigator.share({title: "Tes partitions", text: e.prenom + ", voici ton accès personnel aux partitions :", url: lienEleve(e)}); else { await navigator.clipboard.writeText(lienEleve(e)); $("note-eleves").textContent = "Lien de " + e.prenom + " copié."; } } catch (x) {} };
     retirer.onclick = async () => { const avant = repertoire.eleves; repertoire.eleves = avant.filter(x => x !== e);
       try { await ecrireEleves("Élève retiré : " + e.prenom); dessinerEleves(); $("note-eleves").textContent = e.prenom + " n'a plus accès (effectif en une minute)."; } catch (x) { repertoire.eleves = avant; $("note-eleves").textContent = "Échec : " + x.message; } };
-    l.append(el("b", null, e.prenom), partager, retirer); zone.append(l);
+    const age = el("label", null, "âge "), champ = el("input"); champ.type = "number"; champ.min = 3; champ.max = 99; champ.value = e.age || ""; champ.setAttribute("aria-label", "Âge de " + e.prenom);
+    champ.onchange = async () => { const avant = e.age; e.age = +champ.value || null;
+      try { await ecrireEleves("Âge de " + e.prenom); $("note-eleves").textContent = "Âge de " + e.prenom + " enregistré."; } catch (x) { e.age = avant; champ.value = avant || ""; $("note-eleves").textContent = "Échec : " + x.message; } };
+    age.append(champ);
+    l.append(el("b", null, e.prenom), age, partager, retirer); zone.append(l);
   }
   if (!repertoire.eleves.length) zone.append(el("p", "note", "Aucun élève pour l'instant."));
 }
@@ -998,6 +1015,50 @@ $("b-eleves").onclick = async () => {
   $("note-eleves").textContent = RELAIS ? "" : "Le relais n'est pas encore installé : les liens ne fonctionneront qu'ensuite.";
   try { const d = await fichierJson("eleves.json"); repertoire = d && Array.isArray(d.eleves) ? d : {eleves: []}; } catch (e) {}
   dessinerEleves();
+};
+/* Playlists des élèves et goûts : tout est calculé ici, à partir des playlists gardées dans le dépôt privé. */
+const TRANCHES = [[0, 10, "10 ans et moins"], [11, 14, "11 à 14 ans"], [15, 17, "15 à 17 ans"], [18, 200, "18 ans et plus"]];
+function classement(compte, n){ return [...compte.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, n); }
+$("b-stats").onclick = async () => {
+  const zone = $("stats"); zone.hidden = !zone.hidden; if (zone.hidden) return;
+  zone.replaceChildren(el("p", "mince", "Lecture des playlists…"));
+  const donnees = [];
+  for (const e of repertoire.eleves){
+    let pl = null, demandes = [];
+    try { pl = await fichierJson("eleves/" + e.id + "/playlist.json"); } catch (x) {}
+    try { const c = await fichierJson("eleves/" + e.id + "/compteur.json"); demandes = (c && c.historique) || []; } catch (x) {}
+    donnees.push({e, pl, demandes});
+  }
+  zone.replaceChildren();
+  const nomArtiste = new Map();                                   /* artiste sans accents ni casse -> nom tel qu'il est écrit */
+  const cleArtiste = a => { const k = identifiant(a || ""); if (!nomArtiste.has(k)) nomArtiste.set(k, a); return k; };
+  const parEleve = donnees.map(d => { const c = new Map(); for (const t of ((d.pl && d.pl.titres) || [])){ const k = cleArtiste(t.artiste); c.set(k, (c.get(k) || 0) + 1); } return c; });
+  const avecPlaylist = donnees.filter(d => d.pl && d.pl.titres && d.pl.titres.length).length;
+  zone.append(el("p", "mince", avecPlaylist + " élève" + (avecPlaylist > 1 ? "s" : "") + " sur " + donnees.length + " ont chargé une playlist."));
+  const bloc = (titre, indices) => {
+    const eleves = new Map(), titres = new Map();
+    for (const i of indices) for (const [k, n] of parEleve[i]){ eleves.set(k, (eleves.get(k) || 0) + 1); titres.set(k, (titres.get(k) || 0) + n); }
+    if (!eleves.size) return;
+    zone.append(el("h3", null, titre));
+    const ol = el("ol");
+    for (const [k] of [...eleves.entries()].sort((a, b) => b[1] - a[1] || titres.get(b[0]) - titres.get(a[0])).slice(0, 10))
+      ol.append(el("li", null, nomArtiste.get(k) + " : " + eleves.get(k) + " élève" + (eleves.get(k) > 1 ? "s" : "") + ", " + titres.get(k) + " titre" + (titres.get(k) > 1 ? "s" : "")));
+    zone.append(ol);
+  };
+  bloc("Artistes les plus présents, tous élèves confondus", donnees.map((_, i) => i));
+  for (const [min, max, nom] of TRANCHES) bloc("Artistes préférés des " + nom, donnees.map((d, i) => d.e.age >= min && d.e.age <= max ? i : -1).filter(i => i >= 0));
+  if (donnees.some(d => !d.e.age)) zone.append(el("p", "mince", "Renseigne l'âge de chaque élève ci-dessus pour le classement par tranche d'âge."));
+  zone.append(el("h3", null, "Élève par élève"));
+  donnees.forEach((d, i) => {
+    const det = el("details"), n = (d.pl && d.pl.titres) ? d.pl.titres.length : 0;
+    det.append(el("summary", null, d.e.prenom + (d.e.age ? ", " + d.e.age + " ans" : "") + " : " + (n ? "« " + (d.pl.nom || "sans nom").trim() + " », " + n + " titre" + (n > 1 ? "s" : "") : "pas encore de playlist")));
+    if (n){
+      det.append(el("p", null, "Artistes : " + classement(parEleve[i], 8).map(([k, c]) => nomArtiste.get(k) + " (" + c + ")").join(", ")));
+      det.append(el("p", "mince", "Titres : " + d.pl.titres.slice(0, 40).map(t => t.titre + " – " + t.artiste).join(" ; ") + (n > 40 ? " ; …" : "")));
+    }
+    det.append(el("p", "mince", d.demandes.length ? "Analyses demandées (" + d.demandes.length + ") : " + d.demandes.slice(-15).map(x => x.titre + " – " + x.artiste).join(" ; ") : "Aucune analyse demandée."));
+    zone.append(det);
+  });
 };
 $("b-eleve-ok").onclick = async () => {
   const prenom = $("prenom-eleve").value.trim().slice(0, 40);
