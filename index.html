@@ -190,6 +190,9 @@ input[type=checkbox]{accent-color:var(--encre)!important}
 .mot{font-weight:400}
 .accord{font-weight:var(--graisse-accord,400);letter-spacing:0;color:var(--touche)}
 .accord.rappel{font-weight:var(--graisse-accord,400);color:var(--pale)}
+.accord .basse{font-size:.88em;margin-left:.04em}
+#provisoire{margin:2px 14px 8px 23px;padding:7px 12px;border-left:3px solid var(--rubrique);background:var(--voile);font-size:15px;max-width:74ch}
+body[data-h=ecolier] #provisoire{font-size:12px;line-height:1.7}
 .accord.doute,.mot.doute{text-decoration:underline wavy var(--pale);text-decoration-thickness:1.2px;text-underline-offset:3px}
 .num{font-style:normal;transform:translate(-3px,-11px)}
 .num:empty{display:none}
@@ -261,6 +264,7 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
 .tete .actions{align-items:center}
 
 @media print{
+  #provisoire{display:none!important}
   body[data-h]{background:#fff!important;--encre:#000;--papier:#fff;--trait:#000;--gris:#555;--pale:#888;--filet:#ccc;--voile:#f2f2f2}
   body[data-h=ardoise] .accord,body[data-h=ardoise] #entete .artiste{color:#000}
   .hab{display:none!important}
@@ -301,7 +305,7 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
   <p id="message" role="status"></p>
   <section id="zone-silence">
     <h2>Analyser sans écoute</h2>
-    <p>Rien n'est joué et aucun ordinateur n'est nécessaire : la vidéo YouTube du titre est lue à distance, puis analysée. Compte une vingtaine de minutes ; tu peux fermer la page en attendant.</p>
+    <p>Rien n'est joué et aucun ordinateur n'est nécessaire : la vidéo YouTube du titre est lue à distance, puis analysée. Une esquisse arrive en trois minutes environ, la première page calée quelques minutes plus tard, et la partition complète au bout d'une vingtaine de minutes. Tu peux fermer la page en attendant.</p>
     <button class="plein" id="b-silence">Analyser ce titre</button>
   </section>
   <section id="zone-ecoute" hidden>
@@ -328,6 +332,7 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
   <button class="outil" id="b-reglages" aria-expanded="false" aria-controls="reglages">Réglages</button></div>
 <div id="reglages"></div>
 <header id="entete"></header>
+<p id="provisoire" role="status" hidden></p>
 <div id="grille"></div>
 <p id="legende"></p></div>
 <span id="jauge"></span>
@@ -367,7 +372,8 @@ function notes(t){
 const signes = s => s.replace(/♯/g, '<i class="di"></i>').replace(/♭/g, '<i class="be"></i>');
 function ecritAccord(a, t){
   const suf = (simple ? SIMPLES : SUFFIXES)[a.q], m = suf[0] === "m" ? "m" : "", reste = suf.slice(m.length);
-  return signes(notes(t)[mod(a.r + transpo, 12)]) + m + (reste ? "<sup>" + signes(reste) + "</sup>" : "");
+  return signes(notes(t)[mod(a.r + transpo, 12)]) + m + (reste ? "<sup>" + signes(reste) + "</sup>" : "")
+    + (a.b != null ? '<span class="basse">/' + signes(notes(t)[mod(a.b + transpo, 12)]) + "</span>" : "");      /* accord renversé : Do/Sol */
 }
 function duree(s){ s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 
@@ -576,6 +582,12 @@ function enTete(t){
 function afficher(){
   const t = TITRES[courant], grille = $("grille"), NS = "http://www.w3.org/2000/svg";
   enTete(t);
+  const pv = t.provisoire, bandeau = $("provisoire");
+  bandeau.hidden = !pv;
+  if (pv) bandeau.textContent = (pv.etape === "esquisse" ? "Esquisse : temps et accords d'une première lecture, paroles placées à peu près."
+      : pv.etape === "grille" ? "Grille prête : temps et accords recoupés. Les paroles sont encore placées à peu près."
+      : "Première page prête : paroles calées jusqu'à " + duree(pv.mots_cales_jusqua || 0) + ", la suite est encore placée à peu près.")
+    + " L'analyse continue" + (typeof surveiller === "function" ? " ; cette page se met à jour toute seule." : ".");
   grille.replaceChildren(); grille.style.width = impression ? "690px" : "";
   const largeur = (impression ? 690 : grille.clientWidth - 12), haut = grille.getBoundingClientRect().top + scrollY;
   const choix = choisir(t, largeur, impression ? 930 : Math.max(120, innerHeight - haut - 4));
@@ -607,7 +619,7 @@ function afficher(){
   }
   const fraction = plan.sub === 3 ? "tiers de temps" : plan.sub === 4 ? "quart de temps" : "demi-temps";
   $("legende").textContent = "Sur la ligne de pulsations, le grand trait ouvre la mesure, " + (S.m.marque === "points" ? "le point" : "le trait moyen") + " marque le temps, le petit trait le "
-    + fraction + " ; chaque mot commence à son repère. Une ligne commence avec sa phrase, parfois en cours de mesure. Entre parenthèses, l'accord en cours rappelé en début de ligne."
+    + fraction + " ; chaque mot commence à son repère. Une ligne commence avec sa phrase, parfois en cours de mesure. Entre parenthèses, l'accord en cours rappelé en début de ligne. Do/Sol : accord de Do avec Sol à la basse."
     + (reperes ? " Un mot ou un accord souligné est incertain." : "");
   $("t-val").textContent = transpo === 0 ? "ton réel" : (transpo > 0 ? "+" : "−") + Math.abs(transpo) + " ½ ton";
   const liste = $("choix-titre"); if (liste) liste.value = courant;
@@ -668,9 +680,11 @@ function nomFichier(artiste, titre, ext){ return propre(artiste).replace(/ - /g,
 function idDe(artiste, titre){ return identifiant(propre(artiste).replace(/ - /g, ", ") + " " + propre(titre)); }
 
 /* État d'un titre : [clé, étiquette de la liste, classe] */
+const ETAPES = {"esquisse": "Esquisse", "grille": "Grille", "premiere-page": "1re page"};
 function etatDe(t){
-  const b = bilan[idDe(t.artiste, t.titre)];
-  if (enAttente.has(idDe(t.artiste, t.titre))) return ["attente", "Analyse en cours", "cours"];
+  const b = bilan[idDe(t.artiste, t.titre)], enCours = enAttente.has(idDe(t.artiste, t.titre));
+  if (b && b.etat === "ok" && b.provisoire) return ["provisoire", ETAPES[b.provisoire.etape] || "En cours", "cours"];   /* déjà lisible, l'analyse continue */
+  if (enCours && !(b && b.etat === "ok" && b.complet)) return ["attente", "Analyse en cours", "cours"];
   if (b && b.etat === "ok" && b.complet) return ["partition", "Partition", "fait"];
   if (b && b.etat === "ok") return ["extrait", "Extrait", ""];
   if (b && b.complet) return ["echec", "Échec", "echec"];
@@ -680,7 +694,7 @@ function dessinerListe(){
   const q = identifiant($("filtre").value), pretes = $("f-pretes").checked, liste = $("liste"); liste.replaceChildren();
   let n = 0, faits = 0;
   for (const t of playlist){
-    const e = etatDe(t), lisible = e && (e[0] === "partition" || e[0] === "extrait"); if (e && e[0] === "partition") faits++;
+    const e = etatDe(t), lisible = e && (e[0] === "partition" || e[0] === "extrait" || e[0] === "provisoire"); if (e && e[0] === "partition") faits++;
     if ($("filtre").value && !identifiant(t.artiste + " " + t.titre).includes(q)) continue;
     if (pretes && !lisible) continue;
     if (++n > 400) continue;
@@ -705,9 +719,10 @@ function majFiche(){
   $("f-h").textContent = t.titre || "Titre"; $("f-sous").textContent = t.artiste;
   $("f-etat").textContent = !e ? "Pas encore de partition pour ce titre." : e[0] === "partition" ? "La partition complète est prête."
     : e[0] === "extrait" ? "Seul un extrait de 30 secondes a été analysé." : e[0] === "attente" ? "Demande reçue : l'analyse est en attente ou en cours."
+    : e[0] === "provisoire" ? "Une version provisoire est déjà lisible (" + e[1].toLowerCase() + ") ; l'analyse continue."
     : "La dernière analyse a échoué" + (b && b.alertes && b.alertes.length ? " : " + b.alertes[0] : ".");
   $("b-voir").hidden = !(b && b.etat === "ok");
-  $("b-silence").disabled = !!(e && e[0] === "attente");
+  $("b-silence").disabled = enAttente.has(idDe(t.artiste, t.titre));
   $("b-silence").textContent = b && b.etat === "ok" && b.complet ? "Refaire l'analyse" : "Analyser ce titre";
 }
 
@@ -761,8 +776,27 @@ async function voirPartition(depuis){
     dire("Chargement de la partition…");
     const d = await fichierJson("resultats/" + id + ".json");
     if (!d) throw new Error("elle est introuvable dans le dépôt");
-    origine = depuis; TITRES = [d]; vue("vue-partition"); ouvrir(0); dire(""); $("suivi").classList.remove("actif"); suivre(false);
+    origine = depuis; TITRES = [d]; vue("vue-partition"); ouvrir(0); dire(""); $("suivi").classList.remove("actif"); suivre(false); surveiller(id);
   } catch (e) { dire("Impossible d'ouvrir la partition : " + e.message, true); }
+}
+
+/* Partition provisoire ouverte : on regarde toutes les 20 s si une version plus avancée est arrivée, et on
+   l'affiche à la place, sans toucher à la transposition ni à la position dans la page. */
+let veillePartition = null;
+function surveiller(id){
+  clearTimeout(veillePartition);
+  if (!(TITRES[0] && TITRES[0].provisoire)) return;
+  veillePartition = setTimeout(async () => {
+    if ($("vue-partition").hidden || !TITRES[0] || TITRES[0].id !== id) return;
+    try {
+      const d = await fichierJson("resultats/" + id + ".json");
+      if (d && d.etat === "ok" && JSON.stringify(d.provisoire || null) !== JSON.stringify(TITRES[0].provisoire || null)){
+        TITRES = [d]; afficher();
+        if (!d.provisoire) charger(false);
+      }
+    } catch (e) {}
+    surveiller(id);
+  }, 20000);
 }
 
 /* Suivi des analyses : interroge GitHub Actions et recharge le bilan quand une analyse se termine. */
