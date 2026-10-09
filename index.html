@@ -879,6 +879,7 @@ const retour = el("button", "outil", "← Playlist"); retour.onclick = () => { v
 function boutonsEnPlus(){ const b = el("button", null, "Refaire l'analyse de ce titre"); b.onclick = () => vue("fiche"); return [b]; }
 $("outils").prepend(retour);
 vue("appli"); charger();
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});   /* pour l'installation en appli */
 
 </script>
 </body>
