@@ -104,14 +104,14 @@ button{cursor:pointer}
 #suivi.vivant::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--rubrique);animation:pouls 1.2s ease-in-out infinite;transform:translateY(-1px)}
 @keyframes pouls{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){#suivi.vivant::before{animation:none}}
-#connexion{margin:16px 0 0;padding:14px 16px 16px;border:1.5px solid var(--encre);font-size:15px}
-#connexion h2{font-family:var(--titre);font-size:18px;margin:0 0 8px}
-#connexion ol{margin:0 0 12px;padding-left:20px}
-#connexion li{margin:3px 0}
-#connexion .note{font-size:13px;color:var(--gris);margin:8px 0 0}
-#connexion .rang{display:flex;gap:8px;flex-wrap:wrap}
-#connexion .rang .champ{flex:1 1 220px}
-#connexion .plein{padding:8px 14px;font-size:15px}
+:is(#connexion,#changer){margin:16px 0 0;padding:14px 16px 16px;border:1.5px solid var(--encre);font-size:15px}
+:is(#connexion,#changer) h2{font-family:var(--titre);font-size:18px;margin:0 0 8px}
+:is(#connexion,#changer) ol{margin:0 0 12px;padding-left:20px}
+:is(#connexion,#changer) li{margin:3px 0}
+:is(#connexion,#changer) .note{font-size:13px;color:var(--gris);margin:8px 0 0}
+:is(#connexion,#changer) .rang{display:flex;gap:8px;flex-wrap:wrap}
+:is(#connexion,#changer) .rang .champ{flex:1 1 220px}
+:is(#connexion,#changer) .plein{padding:8px 14px;font-size:15px}
 .champ{width:100%;border:0;border-bottom:1.5px solid var(--encre);border-radius:0;background:none;padding:8px 2px;font-size:17px}
 .champ::placeholder{color:var(--pale)}
 .champ:focus-visible{outline:0;border-bottom-width:3px;padding-bottom:6.5px}
@@ -173,8 +173,8 @@ body[data-h=surligneurs]{background-image:repeating-linear-gradient(0deg,transpa
 
 /* les écritures n'ont qu'une graisse : la hiérarchie passe par la taille et la couleur */
 b,strong,dd,.plein,.creux,#depot,#message,#etapes li.ici,.ligne .t b,#choix-titre{font-weight:400!important}
-.tete h1,#fiche h1,#fiche h2,#connexion h2,#entete h1,#entete .artiste{font-weight:var(--graisse-titre,400)!important}
-#fiche h2,#connexion h2{font-size:26px;line-height:1.1}
+.tete h1,#fiche h1,#fiche h2,:is(#connexion,#changer) h2,#entete h1,#entete .artiste{font-weight:var(--graisse-titre,400)!important}
+#fiche h2,:is(#connexion,#changer) h2{font-size:26px;line-height:1.1}
 :focus-visible{outline-color:var(--encre)}
 input[type=checkbox]{accent-color:var(--encre)!important}
 
@@ -221,7 +221,7 @@ body[data-h=ecolier] .num{font-family:var(--texte);font-size:9px;color:var(--tou
 body[data-h=ecolier] #legende{font-size:11.5px;line-height:1.8}
 body[data-h=ecolier] #appli,body[data-h=ecolier] #fiche{zoom:.86}
 body[data-h=ecolier] .tete h1,body[data-h=ecolier] #fiche h1{font-size:30px;line-height:1.6}
-body[data-h=ecolier] #fiche h2,body[data-h=ecolier] #connexion h2{font-size:20px;line-height:1.8}
+body[data-h=ecolier] #fiche h2,body[data-h=ecolier] :is(#connexion,#changer) h2{font-size:20px;line-height:1.8}
 body[data-h=ecolier] #f-sous{margin-top:.5em;line-height:1.8}
 body[data-h=ecolier] #fiche section p,body[data-h=ecolier] #depot small{line-height:1.7}
 
@@ -282,8 +282,21 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
 <div id="appli">
   <header class="tete"><h1>Ma playlist</h1>
     <div class="actions"><button class="lien" id="b-playlist" title="Relire la playlist sur YouTube Music">Relire la playlist</button>
+    <button class="lien" id="b-changer">Changer de playlist</button>
     <button class="lien" id="b-cle">Clé d'accès</button></div></header>
   <div id="suivi" role="status"></div>
+  <section id="changer" hidden>
+    <h2>Utiliser une autre playlist</h2>
+    <p id="playlist-actuelle" class="note" style="margin:0 0 10px"></p>
+    <ol>
+      <li>Dans YouTube Music (ou YouTube), ouvrir la playlist, puis Partager, Copier le lien.</li>
+      <li>La playlist doit être <b>publique</b> ou <b>non répertoriée</b> : une playlist privée ne peut pas être lue.</li>
+      <li>Coller le lien ci-dessous.</li>
+    </ol>
+    <div class="rang"><input class="champ" id="lien-playlist" type="url" placeholder="https://music.youtube.com/playlist?list=…" autocomplete="off" aria-label="Lien de la playlist">
+    <button class="plein" id="b-changer-ok">Utiliser cette playlist</button></div>
+    <p class="note">Les partitions déjà faites sont conservées. La liste des titres est remplacée en une à deux minutes.</p>
+  </section>
   <section id="connexion" hidden>
     <h2>Relier cette page au dépôt GitHub</h2>
     <ol>
@@ -835,6 +848,30 @@ $("b-playlist").onclick = async () => {
   const r = await api("/actions/workflows/playlist.yml/dispatches", {method: "POST", body: JSON.stringify({ref: BRANCHE})}).catch(e => null);
   $("suivi").textContent = r && r.ok ? "Lecture de la playlist demandée…" : "GitHub a refusé la demande : la clé a-t-elle le droit « Actions » en écriture ?";
   $("suivi").classList.add("actif"); window.attendPlaylist = true; setTimeout(() => suivre(false), 6000);
+};
+/* Changer de playlist : le lien est écrit dans essai/playlist.txt, ce qui relance la lecture de la playlist. */
+$("b-changer").onclick = async () => {
+  $("changer").hidden = !$("changer").hidden;
+  if ($("changer").hidden) return;
+  $("lien-playlist").focus();
+  try { const d = await fichierJson("playlist.json"); $("playlist-actuelle").textContent = d ? "Playlist actuelle : « " + (d.nom || "sans nom") + " », " + d.titres.length + " titre" + (d.titres.length > 1 ? "s" : "") + ", lue le " + d.lue_le + "." : ""; } catch (e) {}
+};
+$("b-changer-ok").onclick = async () => {
+  const brut = $("lien-playlist").value.trim(), m = brut.match(/[?&]list=([A-Za-z0-9_-]{10,})/);
+  let hote = ""; try { hote = new URL(brut).hostname; } catch (e) {}
+  if (!m || !/(^|\.)youtube\.com$/.test(hote)){ dire("Ce n'est pas un lien de playlist YouTube : il doit contenir « list=… ».", true); return; }
+  const lien = "https://music.youtube.com/playlist?list=" + m[1], chemin = "/contents/essai/playlist.txt";
+  try {
+    dire("Enregistrement de la playlist…");
+    const corps = {message: "Nouvelle playlist", branch: BRANCHE, content: enBase64(new TextEncoder().encode(lien + "\n"))};
+    const deja = await api(chemin + "?ref=" + BRANCHE);
+    if (deja.ok) corps.sha = (await deja.json()).sha;
+    const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
+    if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
+    $("changer").hidden = true; $("lien-playlist").value = "";
+    dire("Playlist enregistrée : sa lecture démarre, la liste des titres sera remplacée dans une à deux minutes.");
+    window.attendPlaylist = true; setTimeout(() => suivre(false), 6000);
+  } catch (e) { dire("La playlist n'a pas pu être enregistrée : " + e.message, true); }
 };
 $("b-retour").onclick = () => { vue("appli"); dessinerListe(); };
 $("f-artiste").oninput = $("f-titre").oninput = majFiche;
