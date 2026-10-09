@@ -138,6 +138,19 @@ button{cursor:pointer}
 #fiche section{margin:26px 0 0;padding-top:14px;border-top:1px solid var(--encre)}
 #fiche h2{font-family:var(--titre);font-weight:700;font-size:19px;margin:0 0 4px}
 #fiche section p{margin:0 0 12px;color:var(--gris);font-size:15px;max-width:60ch}
+.pg{display:flex;gap:5px;list-style:none;margin:16px 0 8px;padding:0;font-size:14px;color:var(--pale)}
+.pg li{flex:1;position:relative;padding-top:11px;min-width:0}
+.pg li::before,.pg li i{content:"";position:absolute;left:0;top:0;height:6px;border-radius:3px}
+.pg li::before{right:0;background:var(--filet)}
+.pg li i{width:0;background:var(--rubrique);transition:width 1s linear}
+.pg li.passe{color:var(--encre)}
+.pg li.passe i{background:var(--encre)}
+.pg li.ici{color:var(--encre);font-weight:600}
+.pg.pause li i{background:var(--pale)}
+#progres{margin:18px 0 0}
+#p-texte{margin:0;font-size:15px;color:var(--gris)}
+#provisoire .pg{margin:8px 0 2px;font-size:13px}
+#fiche #b-silence{margin:16px 0 0}
 #etapes{display:flex;list-style:none;margin:0 0 14px;padding:0;font-size:14px;color:var(--pale)}
 #etapes li{flex:1;border-top:3px solid var(--filet);padding:6px 6px 0 0}
 #etapes li.passe{border-color:var(--encre);color:var(--encre)}
@@ -321,23 +334,14 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
   <p id="f-etat"></p>
   <button class="plein" id="b-voir" hidden>Ouvrir la partition</button>
   <p id="message" role="status"></p>
-  <section id="zone-silence">
-    <h2>Analyser sans écoute</h2>
-    <p>Rien n'est joué et aucun ordinateur n'est nécessaire : la vidéo YouTube du titre est lue à distance, puis analysée. Une esquisse arrive en trois minutes environ, la première page calée quelques minutes plus tard, et la partition complète au bout d'une vingtaine de minutes. Tu peux fermer la page en attendant.</p>
-    <button class="plein" id="b-silence">Analyser ce titre</button>
-  </section>
+  <section id="progres" hidden><ol class="pg"></ol><p id="p-texte"></p></section>
+  <button class="creux" id="b-silence" hidden>Refaire l'analyse</button>
   <section id="zone-ecoute" hidden>
     <h2>Écouter le titre</h2>
     <p>Le titre s'ouvre dans YouTube Music. Lance la lecture et laisse-le jouer jusqu'au bout, sans autre son sur l'ordinateur. Seule la partition est gardée.</p>
     <ol id="etapes"><li>Préparation</li><li>Écoute</li><li>Analyse</li><li>Partition</li></ol>
     <div class="boutons"><button class="plein" id="b-ecouter">Écouter et analyser</button>
     <button class="creux" id="b-arreter" hidden>Arrêter l'écoute et analyser</button></div>
-  </section>
-  <section id="zone-depot">
-    <h2>Déposer un fichier audio</h2>
-    <p>L'analyse démarre dès l'arrivée du fichier et dure une quinzaine de minutes. Le fichier est retiré du dépôt une fois la partition faite.</p>
-    <button id="depot">Choisir ou glisser ici le fichier de ce titre<small>mp3, m4a, flac, wav, ogg ou opus, 45 Mo au plus. Il est renommé tout seul.</small></button>
-    <input type="file" id="f-fichier" accept="audio/*,.mp3,.m4a,.flac,.wav,.ogg,.opus" hidden>
   </section>
   <details id="noms"><summary>Corriger l'artiste ou le titre (ils servent à retrouver les paroles)</summary>
     <label for="f-artiste">Artiste</label><input class="champ" id="f-artiste">
@@ -694,7 +698,9 @@ function dessinerListe(){
     const l = el("button", "ligne"), txt = el("span", "t"); txt.append(el("b", null, t.titre), el("span", null, t.artiste));
     l.append(txt); if (e) l.append(el("span", "etat " + e[2], e[1]));
     if (t.duree) l.append(el("span", "d", duree(t.duree)));
-    l.onclick = () => { choisir_(t); if (lisible) voirPartition("appli"); else vue("fiche"); };
+    /* Choisir un titre suffit : sa partition s'ouvre si elle existe, sinon son analyse démarre toute seule. */
+    l.onclick = () => { choisir_(t); if (lisible){ voirPartition("appli"); return; }
+      vue("fiche"); attendu = idDe(t.artiste, t.titre); if (!e || e[0] === "echec") demander(); };
     liste.append(l);
   }
   if (playlist.length && !n) liste.append(el("p", null, pretes && !$("filtre").value ? "Aucune partition prête pour l'instant : choisis un titre pour lancer son analyse." : "Aucun titre ne correspond."));
@@ -707,21 +713,61 @@ function vue(nom){ for (const v of ["appli", "fiche", "vue-partition"]) $(v).hid
 function dire(texte, alerte){ const m = $("message"); m.textContent = texte; m.classList.toggle("alerte", !!alerte);
   if ($("fiche").hidden && texte){ const z = $("suivi"); z.textContent = texte; z.classList.add("actif"); z.classList.remove("vivant"); } }
 function choisir_(t){ choisi = t; $("f-artiste").value = t.artiste; $("f-titre").value = t.titre; $("noms").open = false; dire(""); majFiche(); }
+/* Avancement d'une analyse. Les quatre livraisons arrivent à des moments connus (en secondes depuis le départ) :
+   la barre a un segment par livraison, rempli au fil du temps et bloqué tant que la livraison n'est pas arrivée. */
+const ANCRES = [0, 150, 250, 430, 1020], NOMS_ETAPES = ["Esquisse", "Grille", "1re page", "Complète"];
+let analyse = null, attendu = null;      /* analyse : passage en cours sur GitHub ; attendu : titre dont on attend la partition */
+function progression(id){
+  const b = bilan[id], pv = b && b.etat === "ok" && b.provisoire, demande = enAttente.has(id);
+  if (b && b.etat === "en attente" && demande) return {pause: b.attente || {}};
+  if (!demande && !pv) return null;
+  const rang = pv ? ({esquisse: 1, grille: 2, "premiere-page": 3}[pv.etape] || 0) : 0;
+  if (!pv && enAttente.size > 1) return {rang: 0, part: 0, file: true};          /* un autre titre passe peut-être d'abord */
+  if (!analyse) return pv ? {rang, part: 0} : {rang: 0, part: 0, depart: true};
+  if (analyse.file) return {rang: 0, part: 0, file: true};
+  const t = Math.max(ANCRES[rang], Math.min((Date.now() - analyse.debut) / 1000, ANCRES[rang + 1] - 5));
+  return {rang, part: (t - ANCRES[rang]) / (ANCRES[rang + 1] - ANCRES[rang]), prochain: Math.max(1, Math.ceil((ANCRES[rang + 1] - t) / 60)), reste: Math.max(1, Math.ceil((ANCRES[4] - t) / 60))};
+}
+function dessinerProgres(ol, pr){
+  if (!ol.children.length) for (const n of NOMS_ETAPES){ const li = el("li", null, n); li.prepend(el("i")); ol.append(li); }
+  ol.classList.toggle("pause", !!pr.pause);
+  [...ol.children].forEach((li, k) => { const r = pr.rang || 0;
+    li.className = k < r ? "passe" : k === r && !pr.pause && !pr.file ? "ici" : "";
+    li.firstChild.style.width = (k < r ? 100 : k === r ? Math.round(100 * (pr.part || 0)) : 0) + "%"; });
+  const min = n => "environ " + n + " min";
+  return pr.pause ? "En attente : YouTube écarte le service de lecture pour l'instant. Nouvel essai automatique toutes les 15 minutes environ"
+      + (pr.pause.tentatives ? " (" + pr.pause.tentatives + " essai" + (pr.pause.tentatives > 1 ? "s" : "") + ", le dernier à " + new Date(pr.pause.dernier_essai).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + ")" : "") + ". Rien à faire de ton côté."
+    : pr.file ? "En file d'attente : une autre analyse passe d'abord."
+    : pr.depart ? "Demande envoyée : l'analyse démarre."
+    : pr.reste == null ? "Analyse en cours."
+    : (pr.rang === 0 ? "Lecture de la vidéo. Esquisse dans " + min(pr.prochain) : NOMS_ETAPES[pr.rang - 1] + " prête. "
+        + (pr.rang < 3 ? NOMS_ETAPES[pr.rang] + " dans " + min(pr.prochain) : "")) + (pr.rang < 3 ? ", partition" : "Partition") + " complète dans " + min(pr.reste) + ".";
+}
+function majProgres(){
+  if (!$("fiche").hidden){
+    const pr = progression(idDe($("f-artiste").value, $("f-titre").value));
+    $("progres").hidden = !pr;
+    if (pr) $("p-texte").textContent = dessinerProgres($("progres").firstElementChild, pr) + (pr.pause ? "" : " Tu peux fermer la page, l'analyse continue.");
+  } else if (!$("vue-partition").hidden && TITRES[0] && TITRES[0].provisoire){
+    const pr = progression(TITRES[0].id), z = $("provisoire");
+    if (pr && !pr.pause){ let ol = z.querySelector(".pg"); if (!ol){ ol = el("ol", "pg"); z.append(ol); } dessinerProgres(ol, pr); }
+  }
+}
+setInterval(majProgres, 1000);
+
 function majFiche(){
-  const t = {artiste: $("f-artiste").value, titre: $("f-titre").value}, e = etatDe(t), b = bilan[idDe(t.artiste, t.titre)];
+  const t = {artiste: $("f-artiste").value, titre: $("f-titre").value}, id = idDe(t.artiste, t.titre), e = etatDe(t), b = bilan[id], pr = progression(id);
   $("f-h").textContent = t.titre || "Titre"; $("f-sous").textContent = t.artiste;
-  $("f-etat").textContent = !e ? "Pas encore de partition pour ce titre." : e[0] === "partition" ? "La partition complète est prête."
-    : e[0] === "extrait" ? "Seul un extrait de 30 secondes a été analysé." : e[0] === "attente" ? "Demande reçue : l'analyse est en attente ou en cours."
-    : e[0] === "patiente" ? "En attente : le service n'arrive pas à lire la vidéo pour l'instant (YouTube l'écarte par moments). Nouvelle tentative automatique toutes les 15 minutes environ"
-      + (b.attente ? " ; " + b.attente.tentatives + " essai" + (b.attente.tentatives > 1 ? "s" : "") + ", le dernier à " + new Date(b.attente.dernier_essai).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "") + ". Rien à faire de ton côté."
-    : e[0] === "provisoire" ? "Une version provisoire est déjà lisible (" + e[1].toLowerCase() + ") ; l'analyse continue."
-    : "La dernière analyse a échoué" + (b && b.alertes && b.alertes.length ? " : " + b.alertes[0] : ".");
+  $("f-etat").textContent = pr ? "" : !e ? "" : e[0] === "partition" ? "La partition complète est prête."
+    : e[0] === "extrait" ? "Seul un extrait de 30 secondes a été analysé."
+    : e[0] === "echec" ? "La dernière analyse a échoué" + (b && b.alertes && b.alertes.length ? " : " + b.alertes[0] : ".") : "";
   const c = choisi && choisi.titre === t.titre && choisi.artiste === t.artiste ? choisi : null;      /* version retenue pour l'analyse */
-  if (c && c.remplace) $("f-etat").textContent += " L'analyse lira la version du disque, à la place " + (c.remplace === "live" ? "du concert" : "du clip, plus long,") + " de la playlist.";
+  if (c && c.remplace) $("f-etat").textContent += " L'analyse lit la version du disque, à la place " + (c.remplace === "live" ? "du concert" : "du clip, plus long,") + " de la playlist.";
   else if (c && c.version === "live") $("f-etat").textContent += " C'est une version de concert : aucune version du disque n'a été trouvée.";
   $("b-voir").hidden = !(b && b.etat === "ok");
-  $("b-silence").disabled = enAttente.has(idDe(t.artiste, t.titre));
-  $("b-silence").textContent = b && b.etat === "ok" && b.complet ? "Refaire l'analyse" : "Analyser ce titre";
+  $("b-silence").hidden = !!pr || !e;                        /* pendant une analyse, ou avant la première, pas de bouton */
+  $("b-silence").textContent = e && e[0] === "echec" ? "Relancer l'analyse" : "Refaire l'analyse";
+  majProgres();
 }
 
 function enBase64(tampon){
@@ -729,30 +775,10 @@ function enBase64(tampon){
   for (let i = 0; i < o.length; i += 0x8000) s += String.fromCharCode.apply(null, o.subarray(i, i + 0x8000));
   return btoa(s);
 }
-async function envoyer(fichier){
-  const artiste = $("f-artiste").value.trim(), titre = $("f-titre").value.trim();
-  if (!titre){ dire("Indique au moins le titre.", true); $("noms").open = true; return; }
-  if (fichier.size > 45e6){ dire("Fichier trop gros (" + Math.round(fichier.size / 1e6) + " Mo, 45 Mo au plus) : préfère un mp3 ou un m4a.", true); return; }
-  const ext = (fichier.name.split(".").pop() || "mp3").toLowerCase(), nom = nomFichier(artiste, titre, ext);
-  const chemin = "/contents/audio/" + encodeURIComponent(nom);
-  try {
-    dire("Envoi de « " + nom + " » (" + (fichier.size / 1e6).toFixed(1) + " Mo)…");
-    const corps = {message: "Dépôt : " + nom, branch: BRANCHE, content: enBase64(await fichier.arrayBuffer())};
-    const deja = await api(chemin + "?ref=" + BRANCHE);
-    if (deja.ok) corps.sha = (await deja.json()).sha;
-    const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
-    if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
-    enAttente.add(idDe(artiste, titre));
-    dire("Fichier envoyé. L'analyse démarre toute seule ; son avancement s'affiche en haut de la playlist.");
-    majFiche(); dessinerListe(); suivre(true);
-  } catch (e) { dire("L'envoi a échoué : " + e.message, true); }
-}
-
-/* Analyse sans écoute : dépose une demande dans le dépôt ; l'analyse part toute seule sur GitHub. */
 async function demander(){
   const artiste = $("f-artiste").value.trim(), titre = $("f-titre").value.trim();
   if (!titre){ dire("Indique au moins le titre.", true); $("noms").open = true; return; }
-  if (!(choisi && choisi.video)){ dire("La vidéo YouTube de ce titre n'est pas connue : relis la playlist, ou dépose un fichier.", true); return; }
+  if (!(choisi && choisi.video)){ dire("La vidéo YouTube de ce titre n'est pas connue : relis la playlist.", true); return; }
   const id = idDe(artiste, titre), chemin = "/contents/demandes/" + id + ".json";
   try {
     dire("Envoi de la demande…");
@@ -762,9 +788,9 @@ async function demander(){
     if (deja.ok) corps.sha = (await deja.json()).sha;
     const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
     if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
-    enAttente.add(id);
-    dire("Demande envoyée. L'analyse démarre toute seule ; son avancement s'affiche en haut de la playlist.");
-    majFiche(); dessinerListe(); suivre(true);
+    enAttente.add(id); attendu = id;
+    if (bilan[id] && bilan[id].etat !== "ok") delete bilan[id];       /* l'échec précédent n'est plus d'actualité */
+    dire(""); majFiche(); dessinerListe(); suivre(true);
   } catch (e) { dire("La demande a échoué : " + e.message, true); }
 }
 
@@ -809,8 +835,10 @@ async function suivre(force){
       const analyses = runs.filter(x => x.path && (x.path.endsWith("essai.yml") || x.path.endsWith("silencieux.yml")));
       const a = analyses.find(x => x.status !== "completed") || analyses[0], p = runs.find(x => x.path && x.path.endsWith("playlist.yml"));
       const lignes = [];
+      analyse = a && a.status !== "completed" ? {debut: new Date(a.run_started_at || a.created_at).getTime(), file: a.status === "queued"} : null;
       if (a && a.status !== "completed"){
         actif = true; let etape = "";
+        await rafraichir();
         const j = await api("/actions/runs/" + a.id + "/jobs");
         if (j.ok){ const pas = ((await j.json()).jobs[0] || {}).steps || []; const c = pas.find(s => s.status === "in_progress"); if (c) etape = ", étape « " + c.name + " »"; }
         const min = Math.round((Date.now() - new Date(a.run_started_at || a.created_at)) / 60000);
@@ -825,9 +853,23 @@ async function suivre(force){
       zone.textContent = lignes.join(" "); zone.classList.toggle("actif", lignes.length > 0); zone.classList.toggle("vivant", actif);
     }
   } catch (e) {}
-  minuteur = setTimeout(suivre, actif ? 20000 : 90000);
+  minuteur = setTimeout(suivre, actif ? 20000 : enAttente.size ? 30000 : 90000);
 }
 
+/* Pendant une analyse : relit l'état des titres, et ouvre la partition attendue dès qu'une version est lisible. */
+async function rafraichir(){
+  try {
+    const [bi, de] = await Promise.all([fichierJson("resultats/bilan.json"), api("/contents/demandes?ref=" + BRANCHE, {cache: "no-store"}).then(r => r.ok ? r.json() : [])]);
+    const neuf = {}; for (const b of (bi || [])) neuf[b.id] = b;
+    const encore = new Set((Array.isArray(de) ? de : []).map(f => identifiant(f.name.replace(/\.[^.]+$/, ""))));
+    if (attendu && enAttente.has(attendu) && !encore.has(attendu) && !(neuf[attendu] && neuf[attendu].etat === "ok")) encore.add(attendu);   /* demande tout juste envoyée, pas encore visible */
+    bilan = neuf; enAttente = encore;
+    if (!$("appli").hidden) dessinerListe();
+    if (!$("fiche").hidden) majFiche();
+    const b = attendu && bilan[attendu];
+    if (b && b.etat === "ok" && (b.provisoire || !enAttente.has(attendu)) && !$("fiche").hidden && idDe($("f-artiste").value, $("f-titre").value) === attendu){ attendu = null; voirPartition("appli"); }
+  } catch (e) {}
+}
 async function charger(avecSuivi = true){
   if (!lire("cle")){ $("connexion").hidden = false; dessinerListe(); return; }
   try {
@@ -877,12 +919,6 @@ $("b-retour").onclick = () => { vue("appli"); dessinerListe(); };
 $("f-artiste").oninput = $("f-titre").oninput = majFiche;
 $("b-voir").onclick = () => voirPartition("fiche");
 $("b-silence").onclick = demander;
-const depot = $("depot");
-depot.onclick = () => $("f-fichier").click();
-$("f-fichier").onchange = e => { if (e.target.files[0]) envoyer(e.target.files[0]); e.target.value = ""; };
-depot.ondragover = e => { e.preventDefault(); depot.classList.add("survol"); };
-depot.ondragleave = () => depot.classList.remove("survol");
-depot.ondrop = e => { e.preventDefault(); depot.classList.remove("survol"); if (e.dataTransfer.files[0]) envoyer(e.dataTransfer.files[0]); };
 
 /* Écoute locale : proposée seulement quand la page est servie par le programme installé sur l'ordinateur. */
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
