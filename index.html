@@ -790,7 +790,7 @@ async function demander(){
     dire("Envoi de la demande…");
     const demande = {artiste, titre, video: choisi.video, duree: choisi.duree || null, demande_le: new Date().toISOString()};
     const corps = {message: "Demande : " + artiste + " - " + titre, branch: BRANCHE, content: enBase64(new TextEncoder().encode(JSON.stringify(demande)))};
-    const deja = await api(chemin + "?ref=" + BRANCHE);
+    const deja = await api(chemin + "?ref=" + BRANCHE, {cache: "no-store"});
     if (deja.ok) corps.sha = (await deja.json()).sha;
     const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
     if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
@@ -904,7 +904,7 @@ let playlistVoulue = null;                 /* adresse de la playlist qu'on vient
 async function utiliserPlaylist(adresse, liste){
   const chemin = "/contents/essai/playlist.txt";
   const corps = {message: "Playlist choisie", branch: BRANCHE, content: enBase64(new TextEncoder().encode(adresse + "\n"))};
-  const deja = await api(chemin + "?ref=" + BRANCHE);
+  const deja = await api(chemin + "?ref=" + BRANCHE, {cache: "no-store"});
   if (deja.ok) corps.sha = (await deja.json()).sha;
   const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
   if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
