@@ -576,6 +576,7 @@ function enTete(t){
   ligne("Mesure", "à " + (t.temps_par_mesure || 4) + " temps" + (sub === 3 ? " ternaires" : ""));
   if (!t.complet && p && p.debut_extrait_dans_morceau != null) ligne("Extrait", "à partir de " + duree(p.debut_extrait_dans_morceau));
   else if (t.complet && t.duree_audio) ligne("Durée", duree(t.duree_audio));
+  if (t.paroles && t.paroles.source === "transcription") ligne("Paroles", "transcrites à l'oreille, des mots peuvent être faux");
   tete.append(fiche);
 }
 
