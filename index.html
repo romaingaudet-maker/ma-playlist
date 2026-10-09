@@ -439,87 +439,52 @@ function aPlat(t){
   return cases;
 }
 
-/* Endroits où l'on peut aller à la ligne, avec leur coût. On ne coupe pas une phrase : les bons endroits sont
-   le début d'une phrase des paroles (même en cours de mesure : la levée reste avec sa phrase) et les barres de
-   mesure situées entre deux phrases. À défaut, après une ponctuation ; en dernier recours, une barre de mesure
-   au milieu d'une phrase. */
-const COUT_PONCTUATION = 40, COUT_MILIEU = 300, COUT_FORCE = 320;
-function coupes(cases, sub){
-  const N = cases.length, cout = new Map(), dans = new Uint8Array(N + 1), mots = [];
-  cases.forEach((c, i) => c.mots.forEach(w => mots.push({i, w})));
-  const debutTemps = (q, avant) => { const p = q - cases[q].d % sub; return p > avant ? p : q; };
-  for (let k = 0; k < mots.length;){
-    let j = k; while (j + 1 < mots.length && mots[j + 1].w.ligne === mots[k].w.ligne) j++;
-    for (let p = mots[k].i + 1; p <= mots[j].i; p++) dans[p] = 1;
-    if (k > 0){ const p = debutTemps(mots[k].i, mots[k - 1].i); if (p > mots[k - 1].i) cout.set(p, 0); }
-    for (let q = k; q < j; q++) if (/[,;:.!?…]$/.test(mots[q].w.txt) && mots[q + 1].i > mots[q].i){
-      const p = debutTemps(mots[q + 1].i, mots[q].i); if (!cout.has(p)) cout.set(p, COUT_PONCTUATION); }
-    k = j + 1;
-  }
-  for (let p = 1; p < N; p++) if (cases[p].barre && !cout.has(p)) cout.set(p, dans[p] ? COUT_MILIEU : 0);
-  cout.set(N, 0);
-  return cout;
-}
-
 const hMot = f => Math.ceil(S.hMot * f), hAccord = f => Math.ceil(S.hAccord * f * S.accord);
 function hauteurRangee(f){ return hMot(f) + S.regle + S.basAccord + hAccord(f) + Math.round(Math.max(6, f * 0.5)); }
 
-/* Compose une rangée (cases a à b) pour une taille de texte f. Comme sur une partition gravée, la rangée est
-   étirée sur toute la largeur : moins elle contient de temps, plus ils sont espacés (jusqu'à TEMPS_MAX px par
-   temps). r.pire : pire décalage d'un mot ou d'un accord par rapport à son repère, en fraction de temps. */
+/* Compose une rangée (cases a à b) pour une taille de texte f et un pas donné (largeur d'une case).
+   r.pire : pire décalage d'un mot ou d'un accord par rapport à son repère, en fraction de temps. */
 const TEMPS_MAX = 150;
-function composer(plat, a, b, largeur, f, sub, mesure){
-  const cases = plat.cases, n = b - a, pas = Math.min((largeur - MARGE - DEBORD) / n, TEMPS_MAX / sub);
+function composer(plat, a, b, largeur, f, sub, mesure, pas){
+  const cases = plat.cases, n = b - a;
   const r = {debut: a, cases: n, pas, mots: [], accords: [], n: cases[a].barre ? cases[a].n : "", ferme: b === cases.length || cases[b].barre};
   for (let i = a; i < b; i++){
     for (const w of cases[i].mots) r.mots.push({txt: w.txt, doute: w.doute, a: (w.g - a) * pas, w: w.u * f, e: f * (w.vers ? S.ecartVers : S.ecartMot)});
     const c = cases[i].accord;
     if (c) r.accords.push({html: c.html, pc: c.pc, doute: c.doute, a: (i - a) * pas, w: c.u * f * S.accord, e: f * S.ecartAccord});
   }
-  const rappel = a > 0 && n > mesure && !cases[a].accord && cases[a - 1].enCours;
+  const rappel = a > 0 && !cases[a].accord && cases[a - 1].enCours;
   if (rappel){ const html = "(" + rappel.html + ")"; r.accords.unshift({html, pc: rappel.pc, rappel: true, a: 0, w: unite(html, "accord rappel") * f * S.accord, e: 0}); }
   r.pire = Math.max(etaler(r.mots, largeur - MARGE), etaler(r.accords, largeur - MARGE)) / (pas * sub);
   return r;
 }
 
-/* Met le morceau en rangées pour une taille de texte f (programmation dynamique sur les endroits où l'on peut
-   aller à la ligne). Une rangée n'est retenue que si ses mots tiennent à moins d'un quart de temps de leur repère ;
-   on cherche alors le moins de phrases coupées, puis le moins de rangées, puis des rangées bien remplies.
-   Une rangée d'une mesure au plus est toujours admise, même trop serrée : il faut bien l'écrire quelque part. */
-function mettreEnPage(t, plat, largeur, f, mesuresMax){
-  const sub = t.subdivision || 2, mesure = (t.temps_par_mesure || 4) * sub, N = plat.cases.length, utile = largeur - MARGE - DEBORD;
-  const longueurMax = Math.max(mesure, Math.min(Math.floor(utile / 2.5), (mesuresMax || 8) * mesure));
-  const cout = new Map(plat.cout), P = [0];
-  for (const p of [...cout.keys()].sort((a, b) => a - b)){
-    while (p - P[P.length - 1] > longueurMax){ const q = P[P.length - 1] + longueurMax; P.push(q); cout.set(q, COUT_FORCE); }
-    P.push(p);
-  }
-  const M = P.length, total = new Float64Array(M).fill(Infinity), prec = new Int32Array(M), rang = new Array(M); total[0] = 0;
-  for (let j = 1; j < M; j++) for (let i = j - 1; i >= 0; i--){
-    const n = P[j] - P[i], seule = i === j - 1;
-    if (n > longueurMax && !seule) break;
-    if (total[i] === Infinity) continue;
-    const r = composer(plat, P[i], P[j], largeur, f, sub, mesure), tient = r.pire <= 0.25;
-    if (!tient && !seule && n > mesure){ if (n > mesure * 1.5) break; continue; }
-    const vide = 1 - n * r.pas / utile, c = total[i] + 100 + cout.get(P[j]) + (tient ? 0 : 150 + 400 * (r.pire - 0.25)) + (j === M - 1 ? 0 : 12 * vide * vide + (n < mesure ? 60 : 0));
-    if (c < total[j]){ total[j] = c; prec[j] = i; rang[j] = r; }
-  }
-  const res = []; let coupees = 0;
-  for (let j = M - 1; j > 0; j = prec[j]){ res.unshift(rang[j]); if (P[j] < N && cout.get(P[j]) >= COUT_MILIEU) coupees++; }
-  return {res, sub, cases: plat.cases, coupees, serrees: res.filter(r => r.pire > 0.25).length};
-}
-
-/* Choisit la taille du texte, donc la mise en rangées. Dans l'ordre : le moins de phrases coupées et de rangées
-   trop serrées (une phrase sauvée vaut un point de taille sous TAILLE_AISEE), le plus de musique visible sans défilement, puis
-   le texte le plus gros. Le texte ne passe jamais sous TAILLE_MIN. */
-const TAILLE_AISEE = 16;
+/* Mise en rangées régulière : toutes les rangées comptent le même nombre de mesures et les temps ont partout la
+   même largeur, si bien que les pulsations s'alignent d'une rangée à l'autre comme sur une grille. Une phrase peut
+   donc passer à la ligne en son milieu. On choisit le nombre de mesures par rangée et la taille du texte qui
+   montrent le plus de musique sans défilement, à condition que les mots tiennent près de leur repère (trois rangées
+   sur dix au plus avec un mot décalé de plus d'un quart de temps, presque aucune de plus d'un demi-temps) ; sous TAILLE_AISEE, chaque point de taille perdu coûte un peu. */
+const TAILLE_AISEE = 16, SERREES_ADMISES = 0.30, LOIN_ADMIS = 0.06;
 function choisir(t, largeur, hauteur){
-  const plat = {cases: aPlat(t)}; plat.cout = coupes(plat.cases, t.subdivision || 2);
+  const plat = {cases: aPlat(t)}, cases = plat.cases, N = cases.length, sub = t.subdivision || 2, mesure = (t.temps_par_mesure || 4) * sub;
+  const utile = largeur - MARGE - DEBORD, barres = [];
+  cases.forEach((c, i) => { if (i === 0 || c.barre) barres.push(i); }); barres.push(N);
   let meilleur = null;
-  for (let f = TAILLE_MAX; f >= TAILLE_MIN; f--){
-    const plan = mettreEnPage(t, plat, largeur, f, forcer), lignes = Math.max(1, Math.floor(hauteur / hauteurRangee(f)));
-    const visibles = plan.res.slice(0, lignes).reduce((n, r) => n + r.cases, 0), gene = plan.coupees + plan.serrees + Math.max(0, TAILLE_AISEE - f) * 0.75;
-    if (!meilleur || gene < meilleur.gene || (gene === meilleur.gene && visibles > meilleur.visibles)) meilleur = {f, plan, visibles, gene};
+  for (const K of (forcer ? [forcer] : [8, 6, 4, 3, 2, 1])){
+    const bornes = []; let plus = 0;
+    for (let i = 0; i + 1 < barres.length; i += K){ const a = barres[i], b = barres[Math.min(i + K, barres.length - 1)]; bornes.push([a, b]); plus = Math.max(plus, b - a); }
+    const pas = Math.min(utile / Math.max(1, plus), TEMPS_MAX / sub);
+    if (pas * sub < 9 && K > 1 && !forcer) continue;              /* temps trop rapprochés pour se lire */
+    for (let f = TAILLE_MAX; f >= TAILLE_MIN; f--){
+      const res = bornes.map(([a, b]) => composer(plat, a, b, largeur, f, sub, mesure, pas));
+      const serrees = res.filter(r => r.pire > 0.25).length / Math.max(1, res.length), loin = res.filter(r => r.pire > 0.5).length / Math.max(1, res.length);
+      const admis = serrees <= SERREES_ADMISES && loin <= LOIN_ADMIS;
+      const lignes = Math.max(1, Math.floor(hauteur / hauteurRangee(f)));
+      const visibles = res.slice(0, lignes).reduce((n, r) => n + r.cases, 0);
+      const note = admis ? visibles * (1 - 0.06 * Math.max(0, TAILLE_AISEE - f)) + f * 1e-3 : -serrees;
+      if (!meilleur || (admis && !meilleur.admis) || (admis === meilleur.admis && note > meilleur.note))
+        meilleur = {f, K, admis, note, visibles, plan: {res, sub, cases, serrees: res.filter(r => r.pire > 0.25).length}};
+    }
   }
   return meilleur;
 }
@@ -628,7 +593,7 @@ function afficher(){
   }
   const fraction = plan.sub === 3 ? "tiers de temps" : plan.sub === 4 ? "quart de temps" : "demi-temps";
   $("legende").textContent = "Sur la ligne de pulsations, le grand trait ouvre la mesure, " + (S.m.marque === "points" ? "le point" : "le trait moyen") + " marque le temps, le petit trait le "
-    + fraction + " ; chaque mot commence à son repère. Une ligne commence avec sa phrase, parfois en cours de mesure. Entre parenthèses, l'accord en cours rappelé en début de ligne. Do/Sol : accord de Do avec Sol à la basse."
+    + fraction + " ; chaque mot commence à son repère. Toutes les lignes comptent le même nombre de mesures. Entre parenthèses, l'accord en cours rappelé en début de ligne. Do/Sol : accord de Do avec Sol à la basse."
     + (reperes ? " Un mot ou un accord souligné est incertain." : "");
   $("t-val").textContent = transpo === 0 ? "ton réel" : (transpo > 0 ? "+" : "−") + Math.abs(transpo) + " ½ ton";
   const liste = $("choix-titre"); if (liste) liste.value = courant;
@@ -642,7 +607,7 @@ function reglages(){
   const coche = (texte, val, fn) => { const l = el("label"), c = el("input"); c.type = "checkbox"; c.checked = val; c.onchange = () => { fn(c.checked); afficher(); }; l.append(c, texte); return l; };
   const imprimer = el("button", null, "Imprimer"); imprimer.onclick = () => print();
   z.append(
-    choix("Mesures par ligne, au plus", [[0, "automatique"], [1, "1"], [2, "2"], [3, "3"], [4, "4"], [6, "6"], [8, "8"]], forcer, v => forcer = v),
+    choix("Mesures par ligne", [[0, "automatique"], [1, "1"], [2, "2"], [3, "3"], [4, "4"], [6, "6"], [8, "8"]], forcer, v => forcer = v),
     coche("Accords simplifiés", simple, v => simple = v),
     coche("Repères d'incertitude", reperes, v => reperes = v),
     imprimer);
