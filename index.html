@@ -693,6 +693,7 @@ const ETAPES = {"esquisse": "Esquisse", "grille": "Grille", "premiere-page": "1r
 function etatDe(t){
   const b = bilan[idDe(t.artiste, t.titre)], enCours = enAttente.has(idDe(t.artiste, t.titre));
   if (b && b.etat === "ok" && b.provisoire) return ["provisoire", ETAPES[b.provisoire.etape] || "En cours", "cours"];   /* déjà lisible, l'analyse continue */
+  if (enCours && b && b.etat === "en attente") return ["patiente", "En attente", "cours"];   /* refus passager : la demande sera retentée toute seule */
   if (enCours && !(b && b.etat === "ok" && b.complet)) return ["attente", "Analyse en cours", "cours"];
   if (b && b.etat === "ok" && b.complet) return ["partition", "Partition", "fait"];
   if (b && b.etat === "ok") return ["extrait", "Extrait", ""];
@@ -728,8 +729,13 @@ function majFiche(){
   $("f-h").textContent = t.titre || "Titre"; $("f-sous").textContent = t.artiste;
   $("f-etat").textContent = !e ? "Pas encore de partition pour ce titre." : e[0] === "partition" ? "La partition complète est prête."
     : e[0] === "extrait" ? "Seul un extrait de 30 secondes a été analysé." : e[0] === "attente" ? "Demande reçue : l'analyse est en attente ou en cours."
+    : e[0] === "patiente" ? "En attente : le service n'arrive pas à lire la vidéo pour l'instant (YouTube l'écarte par moments). Nouvelle tentative automatique toutes les 15 minutes environ"
+      + (b.attente ? " ; " + b.attente.tentatives + " essai" + (b.attente.tentatives > 1 ? "s" : "") + ", le dernier à " + new Date(b.attente.dernier_essai).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "") + ". Rien à faire de ton côté."
     : e[0] === "provisoire" ? "Une version provisoire est déjà lisible (" + e[1].toLowerCase() + ") ; l'analyse continue."
     : "La dernière analyse a échoué" + (b && b.alertes && b.alertes.length ? " : " + b.alertes[0] : ".");
+  const c = choisi && choisi.titre === t.titre && choisi.artiste === t.artiste ? choisi : null;      /* version retenue pour l'analyse */
+  if (c && c.remplace) $("f-etat").textContent += " L'analyse lira la version du disque, à la place " + (c.remplace === "live" ? "du concert" : "du clip, plus long,") + " de la playlist.";
+  else if (c && c.version === "live") $("f-etat").textContent += " C'est une version de concert : aucune version du disque n'a été trouvée.";
   $("b-voir").hidden = !(b && b.etat === "ok");
   $("b-silence").disabled = enAttente.has(idDe(t.artiste, t.titre));
   $("b-silence").textContent = b && b.etat === "ok" && b.complet ? "Refaire l'analyse" : "Analyser ce titre";
