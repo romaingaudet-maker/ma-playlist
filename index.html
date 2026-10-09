@@ -317,7 +317,6 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
     <button class="lien" id="b-changer">Changer de playlist</button>
     <button class="lien" id="b-eleves" hidden>Élèves</button>
     <button class="lien" id="b-cle">Clé d'accès</button></div></header>
-  <p id="avis-eleve" class="note" hidden style="margin:6px 0 0">Ton professeur peut voir ta playlist et les titres que tu analyses.</p>
   <div id="suivi" role="status"></div>
   <section id="changer" hidden>
     <h2>Mes playlists</h2>
@@ -982,7 +981,7 @@ $("b-changer-ok").onclick = async () => {
   } catch (e) { dire("La playlist n'a pas pu être enregistrée : " + e.message, true); }
 };
 /* Élèves : le répertoire (eleves.json, dans le dépôt privé) donne à chacun un identifiant et un code personnel. */
-if (ELEVE){ $("b-cle").hidden = true; $("avis-eleve").hidden = false; api("/moi").then(r => r.ok ? r.json() : null).then(m => { if (m) document.querySelector(".tete h1").textContent = "Playlist de " + m.prenom; }).catch(() => {}); }
+if (ELEVE){ $("b-cle").hidden = true; api("/moi").then(r => r.ok ? r.json() : null).then(m => { if (m) document.querySelector(".tete h1").textContent = "Playlist de " + m.prenom; }).catch(() => {}); }
 else if (lire("cle")) $("b-eleves").hidden = false;
 let repertoire = {eleves: []};
 const lienEleve = e => location.origin + location.pathname + "?code=" + encodeURIComponent(e.code);
