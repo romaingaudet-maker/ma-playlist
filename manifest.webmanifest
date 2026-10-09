@@ -3,7 +3,7 @@
  "short_name": "Partitions",
  "start_url": ".",
  "display": "browser",
- "background_color": "#fbf7ea",
+ "background_color": "#1a2748",
  "theme_color": "#fbf7ea",
  "icons": [
   {
