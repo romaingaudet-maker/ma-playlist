@@ -138,6 +138,11 @@ button{cursor:pointer}
 #fiche section{margin:26px 0 0;padding-top:14px;border-top:1px solid var(--encre)}
 #fiche h2{font-family:var(--titre);font-weight:700;font-size:19px;margin:0 0 4px}
 #fiche section p{margin:0 0 12px;color:var(--gris);font-size:15px;max-width:60ch}
+#playlists-connues button{display:flex;width:100%;align-items:baseline;gap:10px;text-align:left;background:none;border:0;border-bottom:1px solid var(--filet);padding:10px 2px;font:inherit;color:inherit;cursor:pointer}
+#playlists-connues button b{flex:1;font-weight:600}
+#playlists-connues button span{color:var(--gris);font-size:14px;white-space:nowrap}
+#playlists-connues button[disabled]{cursor:default}
+#playlists-connues button[disabled] span{color:var(--rubrique)}
 .pg{display:flex;gap:5px;list-style:none;margin:16px 0 8px;padding:0;font-size:14px;color:var(--pale)}
 .pg li{flex:1;position:relative;padding-top:11px;min-width:0}
 .pg li::before,.pg li i{content:"";position:absolute;left:0;top:0;height:6px;border-radius:3px}
@@ -299,8 +304,9 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
     <button class="lien" id="b-cle">Clé d'accès</button></div></header>
   <div id="suivi" role="status"></div>
   <section id="changer" hidden>
-    <h2>Utiliser une autre playlist</h2>
-    <p id="playlist-actuelle" class="note" style="margin:0 0 10px"></p>
+    <h2>Mes playlists</h2>
+    <div id="playlists-connues"></div>
+    <h2 id="h-nouvelle" style="margin-top:14px">Une nouvelle playlist</h2>
     <ol>
       <li>Dans YouTube Music (ou YouTube), ouvrir la playlist, puis Partager, Copier le lien.</li>
       <li>La playlist doit être <b>publique</b> ou <b>non répertoriée</b> : une playlist privée ne peut pas être lue.</li>
@@ -875,7 +881,8 @@ async function charger(avecSuivi = true){
   try {
     const dossier = nom => api("/contents/" + nom + "?ref=" + BRANCHE, {cache: "no-store"}).then(r => r.ok ? r.json() : []);
     const [pl, bi, au, de] = await Promise.all([fichierJson("playlist.json"), fichierJson("resultats/bilan.json"), dossier("audio"), dossier("demandes")]);
-    playlist = pl && pl.titres ? pl.titres : [];
+    if (playlistVoulue && pl && pl.adresse !== playlistVoulue){ /* relecture pas encore finie : on garde la copie affichée */ }
+    else { playlist = pl && pl.titres ? pl.titres : []; playlistVoulue = null; }
     bilan = {}; for (const b of (bi || [])) bilan[b.id] = b;
     enAttente = new Set([...(au || []).filter(f => !/\.md$/i.test(f.name)), ...(Array.isArray(de) ? de : [])].map(f => identifiant(f.name.replace(/\.[^.]+$/, ""))));
     $("connexion").hidden = true; dessinerListe(); if (!$("fiche").hidden) majFiche();
@@ -892,27 +899,51 @@ $("b-playlist").onclick = async () => {
   $("suivi").classList.add("actif"); window.attendPlaylist = true; setTimeout(() => suivre(false), 6000);
 };
 /* Changer de playlist : le lien est écrit dans essai/playlist.txt, ce qui relance la lecture de la playlist. */
+/* Mes playlists : celles déjà lues sont gardées dans le dépôt ; on repasse de l'une à l'autre d'un geste. */
+let playlistVoulue = null;                 /* adresse de la playlist qu'on vient de choisir, tant que sa relecture n'est pas finie */
+async function utiliserPlaylist(adresse, liste){
+  const chemin = "/contents/essai/playlist.txt";
+  const corps = {message: "Playlist choisie", branch: BRANCHE, content: enBase64(new TextEncoder().encode(adresse + "\n"))};
+  const deja = await api(chemin + "?ref=" + BRANCHE);
+  if (deja.ok) corps.sha = (await deja.json()).sha;
+  const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
+  if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
+  playlistVoulue = adresse;
+  if (liste){                               /* la copie gardée s'affiche tout de suite, la relecture la rafraîchira */
+    try { const d = await fichierJson("playlists/" + liste + ".json"); if (d && d.titres){ playlist = d.titres; dessinerListe(); } } catch (e) {}
+  }
+  window.attendPlaylist = true; setTimeout(() => suivre(false), 6000);
+}
 $("b-changer").onclick = async () => {
   $("changer").hidden = !$("changer").hidden;
   if ($("changer").hidden) return;
-  $("lien-playlist").focus();
-  try { const d = await fichierJson("playlist.json"); $("playlist-actuelle").textContent = d ? "Playlist actuelle : « " + (d.nom || "sans nom") + " », " + d.titres.length + " titre" + (d.titres.length > 1 ? "s" : "") + ", lue le " + d.lue_le + "." : ""; } catch (e) {}
+  const zone = $("playlists-connues"); zone.replaceChildren();
+  try {
+    const [connues, actuelle] = await Promise.all([fichierJson("playlists.json"), fichierJson("playlist.json")]);
+    const ici = playlistVoulue || (actuelle && actuelle.adresse);
+    for (const c of (connues || [])){
+      const l = el("button"), courante = c.adresse === ici;
+      l.append(el("b", null, (c.nom || "Sans nom").trim()), el("span", null, courante ? "affichée" : c.titres + " titre" + (c.titres > 1 ? "s" : "")));
+      l.disabled = courante;
+      l.onclick = async () => {
+        try { dire("Passage à « " + (c.nom || "").trim() + " »…"); await utiliserPlaylist(c.adresse, c.liste); $("changer").hidden = true; dire(""); }
+        catch (e) { dire("Le changement de playlist a échoué : " + e.message, true); }
+      };
+      zone.append(l);
+    }
+    $("h-nouvelle").hidden = !(connues || []).length;
+  } catch (e) {}
 };
 $("b-changer-ok").onclick = async () => {
   const brut = $("lien-playlist").value.trim(), m = brut.match(/[?&]list=([A-Za-z0-9_-]{10,})/);
   let hote = ""; try { hote = new URL(brut).hostname; } catch (e) {}
   if (!m || !/(^|\.)youtube\.com$/.test(hote)){ dire("Ce n'est pas un lien de playlist YouTube : il doit contenir « list=… ».", true); return; }
-  const lien = "https://music.youtube.com/playlist?list=" + m[1], chemin = "/contents/essai/playlist.txt";
+  const lien = "https://music.youtube.com/playlist?list=" + m[1];
   try {
     dire("Enregistrement de la playlist…");
-    const corps = {message: "Nouvelle playlist", branch: BRANCHE, content: enBase64(new TextEncoder().encode(lien + "\n"))};
-    const deja = await api(chemin + "?ref=" + BRANCHE);
-    if (deja.ok) corps.sha = (await deja.json()).sha;
-    const r = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
-    if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
+    await utiliserPlaylist(lien, null);
     $("changer").hidden = true; $("lien-playlist").value = "";
     dire("Playlist enregistrée : sa lecture démarre, la liste des titres sera remplacée dans une à deux minutes.");
-    window.attendPlaylist = true; setTimeout(() => suivre(false), 6000);
   } catch (e) { dire("La playlist n'a pas pu être enregistrée : " + e.message, true); }
 };
 $("b-retour").onclick = () => { vue("appli"); dessinerListe(); };
