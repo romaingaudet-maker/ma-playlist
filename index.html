@@ -399,8 +399,13 @@ let courant = 0, transpo = 0, simple = false, reperes = true, forcer = 0, impres
 const DIESES = ["Do","Do♯","Ré","Ré♯","Mi","Fa","Fa♯","Sol","Sol♯","La","La♯","Si"];
 const BEMOLS = ["Do","Ré♭","Ré","Mi♭","Mi","Fa","Sol♭","Sol","La♭","La","Si♭","Si"];
 const MIXTES = ["Do","Do♯","Ré","Mi♭","Mi","Fa","Fa♯","Sol","La♭","La","Si♭","Si"];
-const SUFFIXES = {maj:"",min:"m",dim:"dim",aug:"aug",min6:"m6",maj6:"6",min7:"m7",minmaj7:"mM7",maj7:"M7","7":"7",dim7:"dim7",hdim7:"m7♭5",sus2:"sus2",sus4:"sus4"};
-const SIMPLES = {maj:"",min:"m",dim:"dim",aug:"aug",min6:"m",maj6:"",min7:"m",minmaj7:"m",maj7:"","7":"7",dim7:"dim",hdim7:"dim",sus2:"sus2",sus4:"sus4"};
+/* Sans armure pour trancher (ton de Do ou de La mineur, ton inconnu), l'accord s'écrit selon sa nature :
+   majeur en bémols (Mi♭M, La♭M, Si♭M, Ré♭M), mineur en dièses (Fa♯m, Sol♯m, Do♯m, Ré♯m) ; Fa♯ et Si♭ gardent leur nom courant. */
+const MIXTES_MAJEUR = ["Do","Ré♭","Ré","Mi♭","Mi","Fa","Fa♯","Sol","La♭","La","Si♭","Si"];
+const MIXTES_MINEUR = ["Do","Do♯","Ré","Ré♯","Mi","Fa","Fa♯","Sol","Sol♯","La","Si♭","Si"];
+const MINEURS = ["min","min6","min7","minmaj7","dim","dim7","hdim7"];
+const SUFFIXES = {maj:"M",min:"m",dim:"dim",aug:"aug",min6:"m6",maj6:"6",min7:"m7",minmaj7:"mM7",maj7:"M7","7":"7",dim7:"dim7",hdim7:"m7♭5",sus2:"sus2",sus4:"sus4"};
+const SIMPLES = {maj:"M",min:"m",dim:"dim",aug:"aug",min6:"m",maj6:"M",min7:"m",minmaj7:"m",maj7:"M","7":"7",dim7:"dim",hdim7:"dim",sus2:"sus2",sus4:"sus4"};
 const mod = (a, n) => ((a % n) + n) % n;
 const TAILLE_MIN = 13, TAILLE_MAX = 23, MARGE = 19, DEBORD = 24;   /* DEBORD : place laissée à droite pour qu'un mot de fin de mesure parte bien de son repère */
 /* Habillage : proportions de la rangée et tracé de la ligne de pulsations.
@@ -424,9 +429,14 @@ function notes(t){
 /* Dièses et bémols sont dessinés, les chiffres et qualités montent en exposant : « Fa♯m7 » s'écrit Fa + dièse + m + 7 en haut. */
 const signes = s => s.replace(/♯/g, '<i class="di"></i>').replace(/♭/g, '<i class="be"></i>');
 function ecritAccord(a, t){
-  const suf = (simple ? SIMPLES : SUFFIXES)[a.q], m = suf[0] === "m" ? "m" : "", reste = suf.slice(m.length);
-  return signes(notes(t)[mod(a.r + transpo, 12)]) + m + (reste ? "<sup>" + signes(reste) + "</sup>" : "")
-    + (a.b != null ? '<span class="basse">/' + signes(ecritBasse(notes(t), mod(a.r + transpo, 12), mod(a.b + transpo, 12))) + "</span>" : "");      /* accord renversé : Do/Sol */
+  const suf = (simple ? SIMPLES : SUFFIXES)[a.q], m = suf[0] === "m" || suf[0] === "M" ? suf[0] : "", reste = suf.slice(m.length);   /* M : majeur, m : mineur */
+  /* Un accord de la gamme (I ii iii IV V vi) suit l'armure (Si♭m en La♭ majeur) ; les autres, leur nature. */
+  let table = notes(t);
+  const rel = t.tonalite ? mod(t.tonalite.tonique + (t.tonalite.mode === "mineur" ? 3 : 0) + transpo, 12) : 0;
+  const mineur = MINEURS.includes(a.q), attendu = {0: false, 2: true, 4: true, 5: false, 7: false, 9: true}[mod(a.r + transpo - rel, 12)];
+  if (table === MIXTES || attendu !== mineur) table = mineur ? MIXTES_MINEUR : MIXTES_MAJEUR;
+  return signes(table[mod(a.r + transpo, 12)]) + m + (reste ? "<sup>" + signes(reste) + "</sup>" : "")
+    + (a.b != null ? '<span class="basse">/' + signes(ecritBasse(table, mod(a.r + transpo, 12), mod(a.b + transpo, 12))) + "</span>" : "");      /* accord renversé : Do/Sol */
 }
 /* La basse s'écrit d'après l'accord qu'elle porte : la tierce de Si est Ré♯, pas Mi♭. */
 function ecritBasse(table, r, b){
@@ -597,7 +607,7 @@ function enTete(t){
   const tete = $("entete"), sub = t.subdivision || 2, p = t.position_extrait; tete.replaceChildren();
   tete.append(el("h1", null, t.titre), el("span", "artiste", t.artiste));
   const fiche = el("dl", "fiche"), ligne = (nom, html) => { const d = el("div"), v = el("dd"); v.innerHTML = html; d.dataset.k = nom.toLowerCase(); d.append(el("dt", null, nom), v); fiche.append(d); };
-  if (t.tonalite) ligne("Ton", signes(notes(t)[mod(t.tonalite.tonique + transpo, 12)]) + " " + t.tonalite.mode + (transpo ? " (transposé)" : ""));
+  if (t.tonalite) ligne("Ton", signes(notes(t)[mod(t.tonalite.tonique + transpo, 12)]) + (t.tonalite.mode === "mineur" ? " m" : " M") + (transpo ? " (transposé)" : ""));
   ligne("Tempo", Math.round(t.tempo) + " à la " + (sub === 3 ? "noire pointée" : "noire"));
   ligne("Mesure", "à " + (t.temps_par_mesure || 4) + " temps" + (sub === 3 ? " ternaires" : ""));
   if (!t.complet && p && p.debut_extrait_dans_morceau != null) ligne("Extrait", "à partir de " + duree(p.debut_extrait_dans_morceau));
