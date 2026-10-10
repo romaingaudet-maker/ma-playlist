@@ -799,16 +799,19 @@ function choisir_(t){ choisi = t; $("f-artiste").value = t.artiste; $("f-titre")
 /* Avancement d'une analyse. Les quatre livraisons arrivent à des moments connus (en secondes depuis le départ) :
    la barre a un segment par livraison, rempli au fil du temps et bloqué tant que la livraison n'est pas arrivée. */
 const ANCRES = [0, 150, 250, 430, 1020], NOMS_ETAPES = ["Esquisse", "Grille", "1re page", "Complète"];
-let analyse = null, attendu = null;      /* analyse : passage en cours sur GitHub ; attendu : titre dont on attend la partition */
+/* analyses : passages en route sur GitHub, par titre ({début, en file}) — chaque demande a le sien, plusieurs tournent
+   ensemble ; analyse : un passage de l'ancien genre (fichiers déposés) ; attendu : titre dont on attend la partition */
+let analyses = {}, analyse = null, attendu = null;
+const ENSEMBLE = 4;
 function progression(id){
   const b = bilan[id], pv = b && b.etat === "ok" && b.provisoire, demande = enAttente.has(id);
   if (b && b.etat === "en attente" && demande) return {pause: b.attente || {}};
   if (!demande && !pv) return null;
   const rang = pv ? ({esquisse: 1, grille: 2, "premiere-page": 3}[pv.etape] || 0) : 0;
-  if (!pv && enAttente.size > 1) return {rang: 0, part: 0, file: true};          /* un autre titre passe peut-être d'abord */
-  if (!analyse) return pv ? {rang, part: 0} : {rang: 0, part: 0, depart: true};
-  if (analyse.file) return {rang: 0, part: 0, file: true};
-  const t = Math.max(ANCRES[rang], Math.min((Date.now() - analyse.debut) / 1000, ANCRES[rang + 1] - 5));
+  const a = analyses[id] || analyse;
+  if (!a) return pv ? {rang, part: 0} : Object.keys(analyses).length >= ENSEMBLE ? {rang: 0, part: 0, file: true} : {rang: 0, part: 0, depart: true};
+  if (a.file) return {rang: 0, part: 0, file: true};
+  const t = Math.max(ANCRES[rang], Math.min((Date.now() - a.debut) / 1000, ANCRES[rang + 1] - 5));
   return {rang, part: (t - ANCRES[rang]) / (ANCRES[rang + 1] - ANCRES[rang]), prochain: Math.max(1, Math.ceil((ANCRES[rang + 1] - t) / 60)), reste: Math.max(1, Math.ceil((ANCRES[4] - t) / 60))};
 }
 function dessinerProgres(ol, pr){
@@ -820,7 +823,7 @@ function dessinerProgres(ol, pr){
   const min = n => "environ " + n + " min";
   return pr.pause ? "En attente : YouTube écarte le service de lecture pour l'instant. Nouvel essai automatique toutes les 15 minutes environ"
       + (pr.pause.tentatives ? " (" + pr.pause.tentatives + " essai" + (pr.pause.tentatives > 1 ? "s" : "") + ", le dernier à " + new Date(pr.pause.dernier_essai).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + ")" : "") + ". Rien à faire de ton côté."
-    : pr.file ? "En file d'attente : une autre analyse passe d'abord."
+    : pr.file ? "En file d'attente : " + ENSEMBLE + " analyses tournent déjà, celle-ci part dès qu'une place se libère."
     : pr.depart ? "Demande envoyée : l'analyse démarre."
     : pr.reste == null ? "Analyse en cours."
     : (pr.rang === 0 ? "Lecture de la vidéo. Esquisse dans " + min(pr.prochain) : NOMS_ETAPES[pr.rang - 1] + " prête. "
@@ -913,20 +916,33 @@ async function suivre(force){
   clearTimeout(minuteur);
   let actif = false;
   try {
-    const r = await api("/actions/runs?per_page=10&branch=" + BRANCHE, {cache: "no-store"});
+    const r = await api("/actions/runs?per_page=30&branch=" + BRANCHE, {cache: "no-store"});
     if (r.ok){
       const runs = (await r.json()).workflow_runs || [], zone = $("suivi");
-      const analyses = runs.filter(x => x.path && (x.path.endsWith("essai.yml") || x.path.endsWith("silencieux.yml")));
-      const a = analyses.find(x => x.status !== "completed") || analyses[0], p = runs.find(x => x.path && x.path.endsWith("playlist.yml"));
+      const passages = runs.filter(x => x.path && (x.path.endsWith("essai.yml") || x.path.endsWith("silencieux.yml")));
+      const a = passages.find(x => x.status !== "completed") || passages[0], p = runs.find(x => x.path && x.path.endsWith("playlist.yml"));
       const lignes = [];
-      analyse = a && a.status !== "completed" ? {debut: new Date(a.run_started_at || a.created_at).getTime(), file: a.status === "queued"} : null;
-      if (a && a.status !== "completed"){
-        actif = true; let etape = "";
+      /* Chaque demande a son passage, nommé « Analyse <fichier de la demande> » : plusieurs avancent en même temps. */
+      const route = {};
+      for (const x of passages){
+        const m = /^Analyse (.+)\.json$/.exec(x.display_title || "");
+        if (m && x.status !== "completed" && !route[identifiant(m[1])])
+          route[identifiant(m[1])] = {debut: new Date(x.run_started_at || x.created_at).getTime(), file: x.status !== "in_progress"};
+      }
+      const nombre = Object.keys(route).length, ancien = a && a.status !== "completed" && !/^Analyse .+\.json$/.test(a.display_title || "") && !a.path.endsWith("silencieux.yml");
+      analyses = route;
+      analyse = ancien ? {debut: new Date(a.run_started_at || a.created_at).getTime(), file: a.status === "queued"} : null;
+      if (nombre || ancien){
+        actif = true;
         await rafraichir();
-        const j = await api("/actions/runs/" + a.id + "/jobs");
-        if (j.ok){ const pas = ((await j.json()).jobs[0] || {}).steps || []; const c = pas.find(s => s.status === "in_progress"); if (c) etape = ", étape « " + c.name + " »"; }
-        const min = Math.round((Date.now() - new Date(a.run_started_at || a.created_at)) / 60000);
-        lignes.push((a.status === "queued" ? "Analyse en file d'attente" : "Analyse en cours" + etape) + ", depuis " + min + " min.");
+        if (nombre > 1) lignes.push(nombre + " analyses en cours en même temps.");
+        else {
+          const u = nombre ? passages.find(x => x.status !== "completed" && /^Analyse .+\.json$/.test(x.display_title || "")) : a; let etape = "";
+          const j = await api("/actions/runs/" + u.id + "/jobs");
+          if (j.ok){ const pas = ((await j.json()).jobs[0] || {}).steps || []; const c = pas.find(s => s.status === "in_progress"); if (c) etape = ", étape « " + c.name + " »"; }
+          const min = Math.round((Date.now() - new Date(u.run_started_at || u.created_at)) / 60000);
+          lignes.push((u.status !== "in_progress" ? "Analyse en file d'attente" : "Analyse en cours" + etape) + ", depuis " + min + " min.");
+        }
       } else if (a){
         if (derniereFin !== a.id){ if (derniereFin !== null || force) await charger(false); derniereFin = a.id; }
         if (a.conclusion !== "success") lignes.push("La dernière analyse " + (a.conclusion === "cancelled" ? "a été annulée" : "a échoué") + " (" + new Date(a.updated_at).toLocaleTimeString() + ").");
