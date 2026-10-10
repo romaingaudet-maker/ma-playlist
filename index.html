@@ -101,6 +101,17 @@ button{cursor:pointer}
 #compte{font-size:14px;color:var(--gris);margin:8px 0 0}
 #suivi{display:none;align-items:baseline;gap:9px;margin:12px 0 0;padding:9px 12px;border-left:3px solid var(--rubrique);background:var(--voile);font-size:15px}
 #suivi.actif{display:flex}
+#encours:empty{display:none}
+#encours{margin:10px 0 0}
+#encours button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;margin:0 0 6px;padding:10px 12px;min-height:52px;border:1px solid var(--rubrique);border-radius:3px;background:none;color:var(--encre)}
+#encours button:hover{background:var(--voile)}
+#encours button::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--rubrique);animation:pouls 1.2s ease-in-out infinite}
+#encours .t{flex:1;min-width:0}
+#encours .t b,#encours .t span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#encours .t b{font-weight:600;font-size:16px;line-height:1.25}
+#encours .t span{font-size:14px;color:var(--rubrique);line-height:1.3}
+#encours .v{flex:none;font-size:14px;color:var(--rubrique);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){#encours button::before{animation:none}}
 #suivi.vivant::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--rubrique);animation:pouls 1.2s ease-in-out infinite;transform:translateY(-1px)}
 @keyframes pouls{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){#suivi.vivant::before{animation:none}}
@@ -318,6 +329,7 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
     <button class="lien" id="b-eleves" hidden>Élèves</button>
     <button class="lien" id="b-cle">Clé d'accès</button></div></header>
   <div id="suivi" role="status"></div>
+  <div id="encours"></div>
   <section id="changer" hidden>
     <h2>Mes playlists</h2>
     <div id="playlists-connues"></div>
@@ -735,7 +747,30 @@ function etatDe(t){
   if (b && b.complet) return ["echec", "Échec", "echec"];
   return null;
 }
+/* Ouvre un titre : sa partition si elle est lisible (même provisoire), sinon sa page, où l'on suit l'analyse. */
+function ouvrirTitre(t, lancer){
+  const e = etatDe(t), lisible = e && (e[0] === "partition" || e[0] === "extrait" || e[0] === "provisoire");
+  choisir_(t); if (lisible){ voirPartition("appli"); return; }
+  vue("fiche"); attendu = idDe(t.artiste, t.titre); if (lancer && (!e || e[0] === "echec")) demander();
+}
+/* Analyses en cours : un bouton par titre, en tête de liste, pour aller suivre sa progression. */
+function dessinerEnCours(){
+  const zone = $("encours"), vus = new Set(), boutons = [];
+  for (const t of playlist){
+    const e = etatDe(t), id = idDe(t.artiste, t.titre);
+    if (!e || e[2] !== "cours" || vus.has(id)) continue;
+    vus.add(id);
+    const b = el("button"), txt = el("span", "t"), pr = progression(id);
+    txt.append(el("b", null, t.titre), el("span", null, e[0] === "patiente" ? "En attente, nouvel essai automatique" : pr && pr.file ? "En file d'attente"
+      : e[0] === "provisoire" ? e[1] + " prête, l'analyse continue" : "Analyse en cours"));
+    b.append(txt, el("span", "v", e[0] === "provisoire" ? "Voir ›" : "Suivre ›"));
+    b.onclick = () => ouvrirTitre(t, false);
+    boutons.push(b); if (boutons.length >= 4) break;
+  }
+  zone.replaceChildren(...boutons);
+}
 function dessinerListe(){
+  dessinerEnCours();
   const q = identifiant($("filtre").value), pretes = $("f-pretes").checked, liste = $("liste"); liste.replaceChildren();
   let n = 0, faits = 0;
   for (const t of playlist){
@@ -747,8 +782,7 @@ function dessinerListe(){
     l.append(txt); if (e) l.append(el("span", "etat " + e[2], e[1]));
     if (t.duree) l.append(el("span", "d", duree(t.duree)));
     /* Choisir un titre suffit : sa partition s'ouvre si elle existe, sinon son analyse démarre toute seule. */
-    l.onclick = () => { choisir_(t); if (lisible){ voirPartition("appli"); return; }
-      vue("fiche"); attendu = idDe(t.artiste, t.titre); if (!e || e[0] === "echec") demander(); };
+    l.onclick = () => ouvrirTitre(t, true);
     liste.append(l);
   }
   if (playlist.length && !n) liste.append(el("p", null, pretes && !$("filtre").value ? "Aucune partition prête pour l'instant : choisis un titre pour lancer son analyse." : "Aucun titre ne correspond."));
