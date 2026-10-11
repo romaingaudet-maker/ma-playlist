@@ -801,7 +801,7 @@ function choisir_(t){ choisi = t; $("f-artiste").value = t.artiste; $("f-titre")
 const ANCRES = [0, 150, 250, 430, 1020], NOMS_ETAPES = ["Esquisse", "Grille", "1re page", "Complète"];
 /* analyses : passages en route sur GitHub, par titre ({début, en file}) — chaque demande a le sien, plusieurs tournent
    ensemble ; analyse : un passage de l'ancien genre (fichiers déposés) ; attendu : titre dont on attend la partition */
-let analyses = {}, analyse = null, attendu = null;
+let analyses = {}, enRoute = {}, analyse = null, attendu = null;
 const ENSEMBLE = 4;
 function progression(id){
   const b = bilan[id], pv = b && b.etat === "ok" && b.provisoire, demande = enAttente.has(id);
@@ -930,13 +930,18 @@ async function suivre(force){
           route[identifiant(m[1])] = {debut: new Date(x.run_started_at || x.created_at).getTime(), file: x.status !== "in_progress"};
       }
       const nombre = Object.keys(route).length, ancien = a && a.status !== "completed" && !/^Analyse .+\.json$/.test(a.display_title || "") && !a.path.endsWith("silencieux.yml");
-      analyses = route;
+      enRoute = route;
       analyse = ancien ? {debut: new Date(a.run_started_at || a.created_at).getTime(), file: a.status === "queued"} : null;
-      if (nombre || ancien){
+      if (nombre || ancien || enAttente.size){
         actif = true;
-        await rafraichir();
-        if (nombre > 1) lignes.push(nombre + " analyses en cours en même temps.");
-        else {
+        await rafraichir();                       /* relit aussi l'heure de départ des analyses, notée dans le bilan */
+        const total = Object.keys(analyses).length;
+        if (total > 1) lignes.push(total + " analyses en cours en même temps.");
+        else if (!nombre && !ancien){
+          const seule = Object.values(analyses)[0];
+          lignes.push(seule ? "Analyse en cours, depuis " + Math.round((Date.now() - seule.debut) / 60000) + " min." : enAttente.size ? "Analyse en file d'attente." : "");
+          if (!lignes[lignes.length - 1]) lignes.pop();
+        } else {
           const u = nombre ? passages.find(x => x.status !== "completed" && /^Analyse .+\.json$/.test(x.display_title || "")) : a; let etape = "";
           const j = await api("/actions/runs/" + u.id + "/jobs");
           if (j.ok){ const pas = ((await j.json()).jobs[0] || {}).steps || []; const c = pas.find(s => s.status === "in_progress"); if (c) etape = ", étape « " + c.name + " »"; }
@@ -964,6 +969,9 @@ async function rafraichir(){
     const encore = new Set((Array.isArray(de) ? de : []).map(f => identifiant(f.name.replace(/\.[^.]+$/, ""))));
     if (attendu && enAttente.has(attendu) && !encore.has(attendu) && !(neuf[attendu] && neuf[attendu].etat === "ok")) encore.add(attendu);   /* demande tout juste envoyée, pas encore visible */
     bilan = neuf; enAttente = encore;
+    /* Les analyses tournent sur d'autres machines : chacune note son heure de départ dans le bilan en commençant. */
+    analyses = Object.assign({}, enRoute);
+    for (const id of enAttente){ const b = bilan[id]; if (b && b.analyse_debut && !analyses[id]) analyses[id] = {debut: Date.parse(b.analyse_debut), file: false}; }
     if (!$("appli").hidden) dessinerListe();
     if (!$("fiche").hidden) majFiche();
     const b = attendu && bilan[attendu];
