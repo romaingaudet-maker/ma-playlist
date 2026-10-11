@@ -619,13 +619,9 @@ function enTete(t){
   const tete = $("entete"), sub = t.subdivision || 2, p = t.position_extrait; tete.replaceChildren();
   tete.append(el("h1", null, t.titre), el("span", "artiste", t.artiste));
   const fiche = el("dl", "fiche"), ligne = (nom, html) => { const d = el("div"), v = el("dd"); v.innerHTML = html; d.dataset.k = nom.toLowerCase(); d.append(el("dt", null, nom), v); fiche.append(d); };
-  if (t.tonalite) ligne("Ton", signes(notes(t)[mod(t.tonalite.tonique + transpo, 12)]) + (t.tonalite.mode === "mineur" ? " m" : " M") + (transpo ? " (transposé)" : ""));
-  ligne("Tempo", Math.round(t.tempo) + " à la " + (sub === 3 ? "noire pointée" : "noire"));
-  ligne("Mesure", "à " + (t.temps_par_mesure || 4) + " temps" + (sub === 3 ? " ternaires" : ""));
   if (!t.complet && p && p.debut_extrait_dans_morceau != null) ligne("Extrait", "à partir de " + duree(p.debut_extrait_dans_morceau));
-  else if (t.complet && t.duree_audio) ligne("Durée", duree(t.duree_audio));
   if (t.paroles && t.paroles.source === "transcription") ligne("Paroles", "transcrites à l'oreille, des mots peuvent être faux");
-  tete.append(fiche);
+  if (fiche.children.length) tete.append(fiche);
 }
 
 function afficher(){
@@ -633,11 +629,7 @@ function afficher(){
   enTete(t);
   const pv = t.provisoire, bandeau = $("provisoire");
   bandeau.hidden = !pv;
-  if (pv) bandeau.textContent = (pv.etape === "ebauche" ? "Ébauche : accords des grilles publiées en ligne, posés sur les paroles avant toute écoute. La pulsation est une pulsation d'attente et la tonalité reste à confirmer : l'écoute les donne dans un instant."
-      : pv.etape === "esquisse" ? "Esquisse : temps et accords d'une première lecture, paroles placées à peu près."
-      : pv.etape === "grille" ? "Grille prête : temps et accords recoupés. Les paroles sont encore placées à peu près."
-      : "Première page prête : paroles calées jusqu'à " + duree(pv.mots_cales_jusqua || 0) + ", la suite est encore placée à peu près.")
-    + " L'analyse continue" + (typeof surveiller === "function" ? " ; cette page se met à jour toute seule." : ".");
+  if (pv) bandeau.textContent = "Première version : les accords et les paroles s'affinent encore" + (typeof surveiller === "function" ? ", cette page se met à jour toute seule." : ".");
   grille.replaceChildren(); grille.style.width = impression ? "690px" : "";
   const largeur = (impression ? 690 : grille.clientWidth - 12), haut = grille.getBoundingClientRect().top + scrollY;
   const choix = choisir(t, largeur, impression ? 930 : Math.max(120, innerHeight - haut - 4));
@@ -740,9 +732,9 @@ function idDe(artiste, titre){ return identifiant(propre(artiste).replace(/ - /g
 const ETAPES = {"ebauche": "Ébauche", "esquisse": "Esquisse", "grille": "Grille", "premiere-page": "1re page"};
 function etatDe(t){
   const b = bilan[idDe(t.artiste, t.titre)], enCours = enAttente.has(idDe(t.artiste, t.titre));
-  if (b && b.etat === "ok" && b.provisoire) return ["provisoire", ETAPES[b.provisoire.etape] || "En cours", "cours"];   /* déjà lisible, l'analyse continue */
+  if (b && b.etat === "ok" && b.provisoire) return ["provisoire", "En cours", "cours"];   /* déjà lisible, l'analyse continue */
   if (enCours && b && b.etat === "en attente") return ["patiente", "En attente", "cours"];   /* refus passager : la demande sera retentée toute seule */
-  if (enCours && !(b && b.etat === "ok" && b.complet)) return ["attente", "Analyse en cours", "cours"];
+  if (enCours && !(b && b.etat === "ok" && b.complet)) return ["attente", "En cours", "cours"];
   if (b && b.etat === "ok" && b.complet) return ["partition", "Partition", "fait"];
   if (b && b.etat === "ok") return ["extrait", "Extrait", ""];
   if (b && b.complet) return ["echec", "Échec", "echec"];
@@ -763,7 +755,7 @@ function dessinerEnCours(){
     vus.add(id);
     const b = el("button"), txt = el("span", "t"), pr = progression(id);
     txt.append(el("b", null, t.titre), el("span", null, e[0] === "patiente" ? "En attente, nouvel essai automatique" : pr && pr.file ? "En file d'attente"
-      : e[0] === "provisoire" ? e[1] + " prête, l'analyse continue" : "Analyse en cours"));
+      : e[0] === "provisoire" ? "Première version prête" : "En préparation"));
     b.append(txt, el("span", "v", e[0] === "provisoire" ? "Voir ›" : "Suivre ›"));
     b.onclick = () => ouvrirTitre(t, false);
     boutons.push(b); if (boutons.length >= 4) break;
@@ -813,28 +805,23 @@ function progression(id){
   if (!a) return pv ? {rang, part: 0} : Object.keys(analyses).length >= ENSEMBLE ? {rang: 0, part: 0, file: true} : {rang: 0, part: 0, depart: true};
   if (a.file) return {rang: 0, part: 0, file: true};
   const t = Math.max(ANCRES[rang], Math.min((Date.now() - a.debut) / 1000, ANCRES[rang + 1] - 5));
-  return {rang, part: (t - ANCRES[rang]) / (ANCRES[rang + 1] - ANCRES[rang]), prochain: Math.max(1, Math.ceil((ANCRES[rang + 1] - t) / 60)), reste: Math.max(1, Math.ceil((ANCRES[4] - t) / 60))};
+  return {vue: !!pv, rang, part: (t - ANCRES[rang]) / (ANCRES[rang + 1] - ANCRES[rang]), prochain: Math.max(1, Math.ceil((ANCRES[rang + 1] - t) / 60)), reste: Math.max(1, Math.ceil((ANCRES[4] - t) / 60))};
 }
 function dessinerProgres(ol, pr){
-  if (!ol.children.length) for (const n of NOMS_ETAPES){ const li = el("li", null, n); li.prepend(el("i")); ol.append(li); }
+  if (!ol.children.length){ const li = el("li"); li.prepend(el("i")); ol.append(li); }
   ol.classList.toggle("pause", !!pr.pause);
-  [...ol.children].forEach((li, k) => { const r = pr.rang || 0;
-    li.className = k < r ? "passe" : k === r && !pr.pause && !pr.file ? "ici" : "";
-    li.firstChild.style.width = (k < r ? 100 : k === r ? Math.round(100 * (pr.part || 0)) : 0) + "%"; });
-  const min = n => "environ " + n + " min";
-  return pr.pause ? "En attente : YouTube écarte le service de lecture pour l'instant. Nouvel essai automatique toutes les 15 minutes environ"
-      + (pr.pause.tentatives ? " (" + pr.pause.tentatives + " essai" + (pr.pause.tentatives > 1 ? "s" : "") + ", le dernier à " + new Date(pr.pause.dernier_essai).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + ")" : "") + ". Rien à faire de ton côté."
-    : pr.file ? "En file d'attente : " + ENSEMBLE + " analyses tournent déjà, celle-ci part dès qu'une place se libère."
-    : pr.depart ? "Demande envoyée : l'analyse démarre."
-    : pr.reste == null ? "Analyse en cours."
-    : (pr.rang === 0 ? "Lecture de la vidéo. Esquisse dans " + min(pr.prochain) : NOMS_ETAPES[pr.rang - 1] + " prête. "
-        + (pr.rang < 3 ? NOMS_ETAPES[pr.rang] + " dans " + min(pr.prochain) : "")) + (pr.rang < 3 ? ", partition" : "Partition") + " complète dans " + min(pr.reste) + ".";
+  const r = pr.rang || 0, fait = pr.pause || pr.file ? 0 : (ANCRES[r] + (pr.part || 0) * (ANCRES[r + 1] - ANCRES[r])) / ANCRES[4];
+  ol.firstChild.firstChild.style.width = Math.round(100 * fait) + "%";
+  return pr.pause ? "En attente : la vidéo ne peut pas être lue pour l'instant. Un nouvel essai part tout seul, rien à faire de ton côté."
+    : pr.file ? "En file d'attente : la partition se prépare dès qu'une place se libère."
+    : pr.depart ? "Demande envoyée."
+    : (r > 0 || pr.vue ? "Une première version est prête. " : "") + (pr.reste == null ? "La partition se prépare." : "Partition complète dans environ " + pr.reste + " min.");
 }
 function majProgres(){
   if (!$("fiche").hidden){
     const pr = progression(idDe($("f-artiste").value, $("f-titre").value));
     $("progres").hidden = !pr;
-    if (pr) $("p-texte").textContent = dessinerProgres($("progres").firstElementChild, pr) + (pr.pause ? "" : " Tu peux fermer la page, l'analyse continue.");
+    if (pr) $("p-texte").textContent = dessinerProgres($("progres").firstElementChild, pr) + (pr.pause ? "" : " Tu peux fermer la page.");
   } else if (!$("vue-partition").hidden && TITRES[0] && TITRES[0].provisoire){
     const pr = progression(TITRES[0].id), z = $("provisoire");
     if (pr && !pr.pause){ let ol = z.querySelector(".pg"); if (!ol){ ol = el("ol", "pg"); z.append(ol); } dessinerProgres(ol, pr); }
@@ -947,7 +934,7 @@ async function suivre(force){
           const j = await api("/actions/runs/" + u.id + "/jobs");
           if (j.ok){ const pas = ((await j.json()).jobs[0] || {}).steps || []; const c = pas.find(s => s.status === "in_progress"); if (c) etape = ", étape « " + c.name + " »"; }
           const min = Math.round((Date.now() - new Date(u.run_started_at || u.created_at)) / 60000);
-          lignes.push((u.status !== "in_progress" ? "Analyse en file d'attente" : "Analyse en cours" + etape) + ", depuis " + min + " min.");
+          lignes.push((u.status !== "in_progress" ? "Analyse en file d'attente" : "En cours") + ", depuis " + min + " min.");
         }
       } else if (a){
         if (derniereFin !== a.id){ if (derniereFin !== null || force) await charger(false); derniereFin = a.id; }
