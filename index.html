@@ -42,6 +42,11 @@ button{cursor:pointer}
 /* ------------------------------------------------------------------ partition */
 #outils{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--encre)}
 #outils .pousse{margin-left:auto}
+.curseur{position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;border-radius:2px;background:var(--rubrique);pointer-events:none;z-index:2}
+.rangee.joue{background:var(--voile)}
+#b-lecture{position:fixed;right:14px;bottom:14px;z-index:5;width:58px;height:58px;border-radius:50%;border:2px solid var(--encre);
+  background:var(--papier);color:var(--encre);font-size:24px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+#b-lecture[aria-pressed=true]{background:var(--encre);color:var(--papier)}
 #outils>*{flex:none}
 .outil{border:0;background:none;padding:7px 8px;font-size:15px;border-radius:4px;line-height:1.2;white-space:nowrap}
 .outil:hover{background:var(--voile)}
@@ -80,7 +85,8 @@ button{cursor:pointer}
 #vide{padding:40px 14px;font-size:17px}
 @page{size:A4;margin:14mm 13mm}
 @media print{
-  #outils,#reglages,#appli,#fiche,#legende{display:none!important}
+  #outils,#reglages,#appli,#fiche,#legende,#b-lecture,.curseur{display:none!important}
+  .rangee.joue{background:none}
   #entete{padding:0 0 10px}
   #entete h1{font-size:26px}
   #entete .artiste{font-size:16px}
@@ -399,7 +405,8 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
 <header id="entete"></header>
 <p id="provisoire" role="status" hidden></p>
 <div id="grille"></div>
-<p id="legende"></p></div>
+<p id="legende"></p>
+<button id="b-lecture" aria-pressed="false" aria-label="Lecture : faire avancer le curseur">▶</button></div>
 <span id="jauge"></span>
 <script>
 let TITRES = [];
@@ -635,6 +642,7 @@ function afficher(){
   const choix = choisir(t, largeur, impression ? 930 : Math.max(120, innerHeight - haut - 4));
   const f = choix.f, plan = choix.plan;
   const hmPlein = hMot(f), H = hauteurRangee(f), fin = plan.res[plan.res.length - 1];
+  lecture.rangees = []; lecture.sub = plan.sub; lecture.total = plan.cases.length;
   for (const r of plan.res){
     const hm = r.mots.length ? hmPlein : 5;                    /* une rangée sans paroles ne garde pas leur ligne */
     const rg = el("div", "rangee"); rg.style.height = (H - hmPlein + hm) + "px";
@@ -658,7 +666,10 @@ function afficher(){
       a.style.cssText = "left:" + (MARGE + o.x) + "px;top:" + (hm + S.regle + S.basAccord) + "px;font-size:" + (f * S.accord) + "px"; if (o.pc != null) a.dataset.r = o.pc; rg.append(a);
     }
     grille.append(rg);
+    lecture.rangees.push({rg, debut: r.debut, cases: r.cases, pas});
+    rg.onclick = e => { const x = e.clientX - rg.getBoundingClientRect().left - MARGE; if (x >= -6) allerA(instantDe(r.debut + Math.max(0, Math.min(r.cases, x / pas)))); };
   }
+  placerCurseur();
   const fraction = plan.sub === 3 ? "tiers de temps" : plan.sub === 4 ? "quart de temps" : "demi-temps";
   $("legende").textContent = "Sur la ligne de pulsations, le grand trait ouvre la mesure, " + (S.m.marque === "points" ? "le point" : "le trait moyen") + " marque le temps, le petit trait le "
     + fraction + " ; chaque mot commence à son repère. Toutes les lignes comptent le même nombre de mesures. Entre parenthèses, l'accord en cours rappelé en début de ligne. Do/Sol : accord de Do avec Sol à la basse."
@@ -666,6 +677,52 @@ function afficher(){
   $("t-val").textContent = transpo === 0 ? "ton réel" : (transpo > 0 ? "+" : "−") + Math.abs(transpo) + " ½ ton";
   const liste = $("choix-titre"); if (liste) liste.value = courant;
 }
+
+/* Mode lecture : un curseur avance sur la ligne de pulsations au rythme du morceau (les instants des temps sont ceux
+   de l'enregistrement), et la page défile pour garder la ligne jouée sous les yeux. Aucun son : on lance le morceau
+   de son côté. Toucher une ligne y amène le curseur. */
+const lecture = {rangees: [], sub: 2, total: 0, pos: 0, joue: false, depart: 0, rangee: null, trait: null, veille: null};
+function instants(){                                         /* instant de chaque temps du morceau, plus celui de la fin */
+  const t = TITRES[courant]; if (lecture.de === t && lecture.temps) return lecture.temps;
+  const T = []; for (const m of t.mesures) for (const tp of m.temps) T.push(tp.t);
+  const e = T.slice(1).map((x, i) => x - T[i]).sort((a, b) => a - b), battue = e.length ? e[e.length >> 1] : 0.5;
+  T.push(T[T.length - 1] + battue); lecture.de = t; return lecture.temps = T;
+}
+function instantDe(c){ const T = instants(), x = c / lecture.sub, i = Math.min(T.length - 2, Math.floor(x)); return T[i] + (x - i) * (T[i + 1] - T[i]); }
+function caseDe(s){
+  const T = instants(); let a = 0, b = T.length - 2;
+  while (a < b){ const m = (a + b + 1) >> 1; if (T[m] <= s) a = m; else b = m - 1; }
+  return (a + Math.max(0, Math.min(1, (s - T[a]) / Math.max(1e-6, T[a + 1] - T[a])))) * lecture.sub;
+}
+function placerCurseur(defiler){
+  const c = caseDe(lecture.pos), R = lecture.rangees; if (!R.length) return;
+  let r = R[R.length - 1]; for (const x of R) if (c < x.debut + x.cases){ r = x; break; }
+  if (!lecture.trait){ lecture.trait = el("i", "curseur"); }
+  const actif = lecture.joue || lecture.pos > 0;
+  lecture.trait.hidden = !actif;
+  if (lecture.trait.parentNode !== r.rg){ if (lecture.rangee) lecture.rangee.classList.remove("joue"); r.rg.append(lecture.trait); lecture.rangee = r.rg;
+    if (defiler){ const h = r.rg.getBoundingClientRect(); scrollTo({top: scrollY + h.top - Math.max(70, innerHeight * 0.3), behavior: "smooth"}); } }
+  r.rg.classList.toggle("joue", actif);
+  lecture.trait.style.left = (MARGE + Math.max(0, Math.min(r.cases, c - r.debut)) * r.pas) + "px";
+}
+function tourner(){
+  if (!lecture.joue) return;
+  const T = instants(); lecture.pos = lecture.depart + (performance.now() - lecture.t0) / 1000;
+  if (lecture.pos >= T[T.length - 1]){ arreter(); lecture.pos = 0; placerCurseur(); return; }
+  placerCurseur(true); requestAnimationFrame(tourner);
+}
+function arreter(){
+  lecture.joue = false; const b = $("b-lecture"); b.textContent = "▶"; b.setAttribute("aria-pressed", "false");
+  if (lecture.veille){ lecture.veille.release().catch(() => 0); lecture.veille = null; }
+}
+function jouer(){
+  lecture.joue = true; lecture.depart = lecture.pos; lecture.t0 = performance.now();
+  const b = $("b-lecture"); b.textContent = "❚❚"; b.setAttribute("aria-pressed", "true");
+  if (navigator.wakeLock) navigator.wakeLock.request("screen").then(v => { if (lecture.joue) lecture.veille = v; else v.release(); }).catch(() => 0);   /* l'écran reste allumé */
+  lecture.rangee = null; if (lecture.trait) lecture.trait.remove(); placerCurseur(true); requestAnimationFrame(tourner);
+}
+function allerA(s){ lecture.pos = Math.max(0, s); lecture.depart = lecture.pos; lecture.t0 = performance.now(); placerCurseur(); }
+$("b-lecture").onclick = () => lecture.joue ? arreter() : jouer();
 
 function reglages(){
   const z = $("reglages"); z.replaceChildren();
@@ -681,7 +738,7 @@ function reglages(){
     imprimer);
   if (typeof boutonsEnPlus === "function") z.append(...boutonsEnPlus());
 }
-function ouvrir(i){ courant = i; transpo = 0; reglages(); afficher(); scrollTo(0, 0); }
+function ouvrir(i){ if (lecture.joue) arreter(); lecture.pos = 0; courant = i; transpo = 0; reglages(); afficher(); scrollTo(0, 0); }
 
 $("t-moins").onclick = () => { transpo = Math.max(-6, transpo - 1); afficher(); };
 $("t-plus").onclick = () => { transpo = Math.min(6, transpo + 1); afficher(); };
@@ -785,7 +842,7 @@ function dessinerListe(){
     : lire("cle") ? "Playlist pas encore lue : touche « Relire la playlist », puis patiente une minute." : "";
 }
 
-function vue(nom){ for (const v of ["appli", "fiche", "vue-partition"]) $(v).hidden = v !== nom; scrollTo(0, 0); }
+function vue(nom){ if (lecture.joue) arreter(); for (const v of ["appli", "fiche", "vue-partition"]) $(v).hidden = v !== nom; scrollTo(0, 0); }
 function dire(texte, alerte){ const m = $("message"); m.textContent = texte; m.classList.toggle("alerte", !!alerte);
   if ($("fiche").hidden && texte){ const z = $("suivi"); z.textContent = texte; z.classList.add("actif"); z.classList.remove("vivant"); } }
 function choisir_(t){ choisi = t; $("f-artiste").value = t.artiste; $("f-titre").value = t.titre; $("noms").open = false; dire(""); majFiche(); }
