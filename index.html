@@ -701,7 +701,16 @@ function placerCurseur(defiler){
   const actif = lecture.joue || lecture.pos > 0;
   lecture.trait.hidden = !actif;
   if (lecture.trait.parentNode !== r.rg){ if (lecture.rangee) lecture.rangee.classList.remove("joue"); r.rg.append(lecture.trait); lecture.rangee = r.rg;
-    if (defiler){ const h = r.rg.getBoundingClientRect(); scrollTo({top: scrollY + h.top - Math.max(70, innerHeight * 0.3), behavior: "smooth"}); } }
+ }
+  if (defiler){
+    /* Défilement continu : la page glisse à la vitesse du morceau. Le curseur reste à la même hauteur d'écran, la
+       ligne suivante monte pendant que la ligne en cours se joue ; un écart (départ, saut) se rattrape en douceur. */
+    const k = R.indexOf(r), haut = r.rg.getBoundingClientRect().top + scrollY;
+    const suite = k + 1 < R.length ? R[k + 1].rg.getBoundingClientRect().top + scrollY : haut + r.rg.offsetHeight;
+    const cible = haut + (suite - haut) * Math.max(0, Math.min(1, (c - r.debut) / r.cases)) - Math.max(70, innerHeight * 0.3);
+    const ecart = cible - scrollY;
+    if (Math.abs(ecart) > 0.3) scrollTo(0, scrollY + (Math.abs(ecart) < 2 ? ecart : ecart * 0.12));
+  }
   r.rg.classList.toggle("joue", actif);
   lecture.trait.style.left = (MARGE + Math.max(0, Math.min(r.cases, c - r.debut)) * r.pas) + "px";
 }
