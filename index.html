@@ -633,7 +633,8 @@ function afficher(){
   enTete(t);
   const pv = t.provisoire, bandeau = $("provisoire");
   bandeau.hidden = !pv;
-  if (pv) bandeau.textContent = (pv.etape === "esquisse" ? "Esquisse : temps et accords d'une première lecture, paroles placées à peu près."
+  if (pv) bandeau.textContent = (pv.etape === "ebauche" ? "Ébauche : accords des grilles publiées en ligne, posés sur les paroles avant toute écoute. La pulsation est une pulsation d'attente ; les vrais temps arrivent."
+      : pv.etape === "esquisse" ? "Esquisse : temps et accords d'une première lecture, paroles placées à peu près."
       : pv.etape === "grille" ? "Grille prête : temps et accords recoupés. Les paroles sont encore placées à peu près."
       : "Première page prête : paroles calées jusqu'à " + duree(pv.mots_cales_jusqua || 0) + ", la suite est encore placée à peu près.")
     + " L'analyse continue" + (typeof surveiller === "function" ? " ; cette page se met à jour toute seule." : ".");
@@ -736,7 +737,7 @@ function nomFichier(artiste, titre, ext){ return propre(artiste).replace(/ - /g,
 function idDe(artiste, titre){ return identifiant(propre(artiste).replace(/ - /g, ", ") + " " + propre(titre)); }
 
 /* État d'un titre : [clé, étiquette de la liste, classe] */
-const ETAPES = {"esquisse": "Esquisse", "grille": "Grille", "premiere-page": "1re page"};
+const ETAPES = {"ebauche": "Ébauche", "esquisse": "Esquisse", "grille": "Grille", "premiere-page": "1re page"};
 function etatDe(t){
   const b = bilan[idDe(t.artiste, t.titre)], enCours = enAttente.has(idDe(t.artiste, t.titre));
   if (b && b.etat === "ok" && b.provisoire) return ["provisoire", ETAPES[b.provisoire.etape] || "En cours", "cours"];   /* déjà lisible, l'analyse continue */
