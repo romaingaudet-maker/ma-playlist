@@ -637,6 +637,7 @@ function afficher(){
   const pv = t.provisoire, bandeau = $("provisoire");
   bandeau.hidden = !pv;
   if (pv) bandeau.textContent = "Première version : les accords et les paroles s'affinent encore" + (typeof surveiller === "function" ? ", cette page se met à jour toute seule." : ".");
+  if (pv && typeof relanceBandeau === "function") relanceBandeau(bandeau, t);
   grille.replaceChildren(); grille.style.width = impression ? "690px" : "";
   const largeur = (impression ? 690 : grille.clientWidth - 12), haut = grille.getBoundingClientRect().top + scrollY;
   const choix = choisir(t, largeur, impression ? 930 : Math.max(120, innerHeight - haut - 4));
@@ -908,10 +909,22 @@ function majFiche(){
   if (c && c.remplace) $("f-etat").textContent += " L'analyse lit la version du disque, à la place " + (c.remplace === "live" ? "du concert" : "du clip, plus long,") + " de la playlist.";
   else if (c && c.version === "live") $("f-etat").textContent += " C'est une version de concert : aucune version du disque n'a été trouvée.";
   $("b-voir").hidden = !(b && b.etat === "ok");
-  $("b-silence").hidden = !!pr || !e;                        /* pendant une analyse, ou avant la première, pas de bouton */
-  $("b-silence").textContent = e && e[0] === "echec" ? "Relancer l'analyse" : "Refaire l'analyse";
+  $("b-silence").hidden = (!!pr && !pr.pause) || !e;         /* pendant une analyse, ou avant la première, pas de bouton ; en attente, on peut relancer */
+  $("b-silence").textContent = pr && pr.pause ? "Relancer maintenant" : e && e[0] === "echec" ? "Relancer l'analyse" : "Refaire l'analyse";
   majProgres();
 }
+
+/* Partition restée à sa première version parce que la vidéo n'a pas pu être lue : on le dit, et on propose de relancer
+   tout de suite plutôt que d'attendre le prochain essai automatique. */
+function relanceBandeau(z, t){
+  const b = bilan[t.id], arret = b && b.provisoire && b.provisoire.arret;
+  if (!b || !(b.attente || arret) || enRelance === t.id) return;
+  z.textContent = "Première version : la vidéo n'a pas encore pu être lue, la partition complète attend." + (arret ? "" : " Un nouvel essai part tout seul.") + " ";
+  const bouton = el("button", "lien", "Relancer maintenant");
+  bouton.onclick = async () => { bouton.disabled = true; bouton.textContent = "Relance…"; enRelance = t.id; setTimeout(() => { enRelance = null; }, 300000); await demander(); afficher(); };
+  z.append(bouton);
+}
+let enRelance = null;
 
 function enBase64(tampon){
   const o = new Uint8Array(tampon); let s = "";
@@ -933,6 +946,7 @@ async function demander(){
     if (r.status === 429) throw new Error((await r.json()).message || "limite du jour atteinte");
     if (!r.ok) throw new Error("GitHub a répondu " + r.status + " : " + ((await r.json()).message || ""));
     enAttente.add(id); attendu = id;
+    if (bilan[id]){ delete bilan[id].attente; if (bilan[id].provisoire) delete bilan[id].provisoire.arret; }   /* relance : l'attente notée n'est plus d'actualité */
     if (bilan[id] && bilan[id].etat !== "ok") delete bilan[id];       /* l'échec précédent n'est plus d'actualité */
     dire(""); majFiche(); dessinerListe(); suivre(true);
   } catch (e) { dire("La demande a échoué : " + e.message, true); }
