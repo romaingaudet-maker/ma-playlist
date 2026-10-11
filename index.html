@@ -633,7 +633,7 @@ function afficher(){
   enTete(t);
   const pv = t.provisoire, bandeau = $("provisoire");
   bandeau.hidden = !pv;
-  if (pv) bandeau.textContent = (pv.etape === "ebauche" ? "Ébauche : accords des grilles publiées en ligne, posés sur les paroles avant toute écoute. La pulsation est une pulsation d'attente ; les vrais temps arrivent."
+  if (pv) bandeau.textContent = (pv.etape === "ebauche" ? "Ébauche : accords des grilles publiées en ligne, posés sur les paroles avant toute écoute. La pulsation est une pulsation d'attente et la tonalité reste à confirmer : l'écoute les donne dans un instant."
       : pv.etape === "esquisse" ? "Esquisse : temps et accords d'une première lecture, paroles placées à peu près."
       : pv.etape === "grille" ? "Grille prête : temps et accords recoupés. Les paroles sont encore placées à peu près."
       : "Première page prête : paroles calées jusqu'à " + duree(pv.mots_cales_jusqua || 0) + ", la suite est encore placée à peu près.")
