@@ -798,6 +798,7 @@ function idDe(artiste, titre){ return identifiant(propre(artiste).replace(/ - /g
 const ETAPES = {"ebauche": "Ébauche", "esquisse": "Esquisse", "grille": "Grille", "premiere-page": "1re page"};
 function etatDe(t){
   const b = bilan[idDe(t.artiste, t.titre)], enCours = enAttente.has(idDe(t.artiste, t.titre));
+  if (b && b.etat === "ok" && b.provisoire && b.provisoire.arret) return ["provisoire", "1re version", ""];   /* la vidéo n'a pas pu être lue : la première version reste */
   if (b && b.etat === "ok" && b.provisoire) return ["provisoire", "En cours", "cours"];   /* déjà lisible, l'analyse continue */
   if (enCours && b && b.etat === "en attente") return ["patiente", "En attente", "cours"];   /* refus passager : la demande sera retentée toute seule */
   if (enCours && !(b && b.etat === "ok" && b.complet)) return ["attente", "En cours", "cours"];
@@ -865,6 +866,8 @@ const ENSEMBLE = 4;
 function progression(id){
   const b = bilan[id], pv = b && b.etat === "ok" && b.provisoire, demande = enAttente.has(id);
   if (b && b.etat === "en attente" && demande) return {pause: b.attente || {}};
+  if (pv && pv.arret) return null;                            /* la première version restera seule : plus rien n'arrive */
+  if (pv && b.attente) return {pause: b.attente, vue: true};  /* première version lisible, la suite attend la vidéo */
   if (!demande && !pv) return null;
   const rang = pv ? ({esquisse: 1, grille: 2, "premiere-page": 3}[pv.etape] || 0) : 0;
   const a = analyses[id] || analyse;
@@ -878,7 +881,7 @@ function dessinerProgres(ol, pr){
   ol.classList.toggle("pause", !!pr.pause);
   const r = pr.rang || 0, fait = pr.pause || pr.file ? 0 : (ANCRES[r] + (pr.part || 0) * (ANCRES[r + 1] - ANCRES[r])) / ANCRES[4];
   ol.firstChild.firstChild.style.width = Math.round(100 * fait) + "%";
-  return pr.pause ? "En attente : la vidéo ne peut pas être lue pour l'instant. Un nouvel essai part tout seul, rien à faire de ton côté."
+  return pr.pause ? (pr.vue ? "Une première version est prête. La suite attend : " : "En attente : ") + "la vidéo ne peut pas être lue pour l'instant. Un nouvel essai part tout seul, rien à faire de ton côté."
     : pr.file ? "En file d'attente : la partition se prépare dès qu'une place se libère."
     : pr.depart ? "Demande envoyée."
     : (r > 0 || pr.vue ? "Une première version est prête. " : "") + (pr.reste == null ? "La partition se prépare." : "Partition complète dans environ " + pr.reste + " min.");
