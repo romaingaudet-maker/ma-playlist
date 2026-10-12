@@ -42,8 +42,7 @@ button{cursor:pointer}
 /* ------------------------------------------------------------------ partition */
 #outils{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--encre)}
 #outils .pousse{margin-left:auto}
-.curseur{position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;border-radius:2px;background:var(--rubrique);pointer-events:none;z-index:2}
-.rangee.joue{background:var(--voile)}
+.curseur{position:absolute;width:2px;margin-left:-1px;border-radius:1px;background:var(--rubrique);opacity:.4;pointer-events:none;z-index:2}
 #b-lecture{position:fixed;right:14px;bottom:14px;z-index:5;width:58px;height:58px;border-radius:50%;border:2px solid var(--encre);
   background:var(--papier);color:var(--encre);font-size:24px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 #b-lecture[aria-pressed=true]{background:var(--encre);color:var(--papier)}
@@ -86,7 +85,6 @@ button{cursor:pointer}
 @page{size:A4;margin:14mm 13mm}
 @media print{
   #outils,#reglages,#appli,#fiche,#legende,#b-lecture,.curseur{display:none!important}
-  .rangee.joue{background:none}
   #entete{padding:0 0 10px}
   #entete h1{font-size:26px}
   #entete .artiste{font-size:16px}
@@ -701,7 +699,7 @@ function placerCurseur(defiler){
   if (!lecture.trait){ lecture.trait = el("i", "curseur"); }
   const actif = lecture.joue || lecture.pos > 0;
   lecture.trait.hidden = !actif;
-  if (lecture.trait.parentNode !== r.rg){ if (lecture.rangee) lecture.rangee.classList.remove("joue"); r.rg.append(lecture.trait); lecture.rangee = r.rg;
+  if (lecture.trait.parentNode !== r.rg){ r.rg.append(lecture.trait); lecture.rangee = r.rg;
  }
   if (defiler){
     /* Défilement continu : la page glisse à la vitesse du morceau. Le curseur reste à la même hauteur d'écran, la
@@ -712,7 +710,8 @@ function placerCurseur(defiler){
     const ecart = cible - scrollY;
     if (Math.abs(ecart) > 0.3) scrollTo(0, scrollY + (Math.abs(ecart) < 2 ? ecart : ecart * 0.12));
   }
-  r.rg.classList.toggle("joue", actif);
+  const ligne = r.rg.querySelector("svg");                      /* le curseur ne couvre que la ligne de pulsations */
+  if (ligne){ lecture.trait.style.top = (ligne.offsetTop - 3) + "px"; lecture.trait.style.height = (ligne.getAttribute("height") * 1 + 6) + "px"; }
   lecture.trait.style.left = (MARGE + Math.max(0, Math.min(r.cases, c - r.debut)) * r.pas) + "px";
 }
 function tourner(){
