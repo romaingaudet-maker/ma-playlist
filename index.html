@@ -666,12 +666,29 @@ function avecGrille(t){
   copie.grilleChoisie = v[k];
   return copie;
 }
+/* Noms courts du menu : « Analyse » (notre écoute), « Consensus » (la majorité des sites), puis « Grille 1 », « Grille 2 »…
+   des plus partagées aux moins partagées. Le détail (sites, transposition) s'affiche sous la partition une fois choisie. */
+function sitesDe(g){ return g.nom.replace(/^majorité des grilles( : )?/, "").split(", ").filter(Boolean); }
+function nbSites(g){ return new Set(sitesDe(g).map(x => x.replace(/ \(\d+\)$/, ""))).size; }
+function nomsCourts(v){
+  const noms = new Map(), ordre = v.map((g, k) => k).filter(k => !v[k].nom.startsWith("majorité"))
+    .sort((a, b) => nbSites(v[b]) - nbSites(v[a]) || a - b);
+  v.forEach((g, k) => { if (g.nom.startsWith("majorité")) noms.set(k, "Consensus"); });
+  ordre.forEach((k, n) => { const x = nbSites(v[k]); noms.set(k, "Grille " + (n + 1) + (x > 1 ? " (" + x + " sites)" : "")); });
+  return {noms, ordre: [...v.keys()].filter(k => v[k].nom.startsWith("majorité")).concat(ordre)};
+}
+function detailGrille(t){
+  const v = t.variantes_accords, k = indiceGrille(t); if (!v || k < 0) return "";
+  const g = v[k], sites = sitesDe(g), tr = g.transposition;
+  return nomsCourts(v).noms.get(k) + " : " + (g.nom.startsWith("majorité") ? "accords les plus fréquents parmi les sites" + (sites.length ? " (identique à " + sites.join(", ") + ")" : "") : sites.join(", "))
+    + (tr ? ", écrite " + (Math.abs(tr) === 1 ? "un demi-ton" : Math.abs(tr) + " demi-tons") + " plus " + (tr > 0 ? "bas" : "haut") + " et remise dans le ton du disque" : "") + ".";
+}
 function choixGrille(t){
   const v = t.variantes_accords; if (!v || !v.length) return null;
-  const l = el("label", "choix-grille", "Accords : "), s = el("select");
+  const l = el("label", "choix-grille", "Accords : "), s = el("select"), {noms, ordre} = nomsCourts(v);
   const option = (val, nom) => { const o = el("option", null, nom); o.value = val; o.selected = indiceGrille(t) == val; s.append(o); };
-  option(-1, "notre analyse");
-  v.forEach((g, k) => option(k, "grille " + g.nom + (g.transposition ? " (écrite " + (Math.abs(g.transposition) === 1 ? "un demi-ton" : Math.abs(g.transposition) + " demi-tons") + " plus " + (g.transposition > 0 ? "bas" : "haut") + ")" : "")));
+  option(-1, "Analyse");
+  for (const k of ordre) option(k, noms.get(k));
   s.onchange = () => { if (+s.value >= 0) grilleChoisie[t.id] = v[+s.value].nom; else delete grilleChoisie[t.id]; try { localStorage.setItem("partitions.grilles", JSON.stringify(grilleChoisie)); } catch (e) {} afficher(); };
   l.append(s); return l;
 }
@@ -726,7 +743,7 @@ function afficher(){
   $("legende").textContent = "Sur la ligne de pulsations, le grand trait ouvre la mesure, " + (S.m.marque === "points" ? "le point" : "le trait moyen") + " marque le temps, le petit trait le "
     + fraction + " ; chaque mot commence à son repère. Toutes les lignes comptent le même nombre de mesures. Entre parenthèses, l'accord en cours rappelé en début de ligne. Do/Sol : accord de Do avec Sol à la basse."
     + (reperes ? " Un mot ou un accord souligné est incertain." : "")
-    + (t.grilleChoisie ? " Accords en gris : passages que la grille ne couvre pas (intro, solos…), complétés par notre analyse." : "");
+    + (t.grilleChoisie ? " " + detailGrille(TITRES[courant] || t) + " Accords en gris : passages que la grille ne couvre pas (intro, solos…), complétés par notre analyse." : "");
   $("t-val").textContent = transpo === 0 ? "ton réel" : (transpo > 0 ? "+" : "−") + Math.abs(transpo) + " ½ ton";
   const liste = $("choix-titre"); if (liste) liste.value = courant;
 }
