@@ -70,7 +70,8 @@ button{cursor:pointer}
 #entete dt{color:var(--gris)}
 #entete dd{margin:0;font-weight:600}
 #grille{padding:2px 8px 0 4px}
-.rangee{position:relative;width:100%;break-inside:avoid}
+.rangee{position:relative;width:100%;break-inside:avoid;overflow-x:clip}
+#grille{overflow-x:clip}
 .num{position:absolute;left:0;font-family:var(--titre);font-style:italic;font-size:10px;line-height:1;color:var(--gris);text-align:right}
 .mot,.accord{position:absolute;white-space:nowrap;line-height:1}
 .mot{font-weight:500}
@@ -677,6 +678,12 @@ function afficher(){
     lecture.rangees.push({rg, debut: r.debut, cases: r.cases, pas});
     rg.onclick = e => { const x = e.clientX - rg.getBoundingClientRect().left - MARGE; if (x >= -6) allerA(instantDe(r.debut + Math.max(0, Math.min(r.cases, x / pas)))); };
   }
+  /* Garde-fou : une ligne trop chargée (paroles mal placées, entassées sur une mesure) ne doit jamais élargir la page,
+     sans quoi le téléphone dézoome et les boutons fixés sortent de l'écran. Ses mots sont alors resserrés pour tenir. */
+  const bord = grille.clientWidth - 2, trop = [];
+  for (const r of lecture.rangees){ const ms = [...r.rg.querySelectorAll(".mot")]; if (!ms.length) continue;
+    const droite = Math.max(...ms.map(m => m.offsetLeft + m.offsetWidth)); if (droite > bord) trop.push([ms, (bord - MARGE) / Math.max(1, droite - MARGE)]); }
+  for (const [ms, k] of trop) for (const m of ms){ m.style.left = (MARGE + (m.offsetLeft - MARGE) * k) + "px"; m.style.fontSize = Math.max(9, parseFloat(m.style.fontSize) * k) + "px"; }
   placerCurseur();
   const fraction = plan.sub === 3 ? "tiers de temps" : plan.sub === 4 ? "quart de temps" : "demi-temps";
   $("legende").textContent = "Sur la ligne de pulsations, le grand trait ouvre la mesure, " + (S.m.marque === "points" ? "le point" : "le trait moyen") + " marque le temps, le petit trait le "
