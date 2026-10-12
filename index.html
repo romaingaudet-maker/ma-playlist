@@ -107,6 +107,12 @@ button{cursor:pointer}
 #suivi.actif{display:flex}
 #encours:empty{display:none}
 #encours{margin:10px 0 0}
+/* Ce qui arrive après coup (analyses en cours, suivi) vit dans un bandeau fixé en bas de l'écran : rien ne se décale
+   sous le doigt quand il apparaît. */
+#bas{position:fixed;left:50%;transform:translateX(-50%);bottom:0;z-index:4;width:min(100%,720px);box-sizing:border-box;
+  max-height:45vh;overflow:auto;padding:0 16px 10px;background:var(--papier);box-shadow:0 -3px 10px rgba(0,0,0,.14)}
+#bas:not(:has(#suivi.actif)):not(:has(#encours button)){display:none}
+#bas #encours button{min-height:46px;padding:7px 12px}
 #encours button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;margin:0 0 6px;padding:10px 12px;min-height:52px;border:1px solid var(--rubrique);border-radius:3px;background:none;color:var(--encre)}
 #encours button:hover{background:var(--voile)}
 #encours button::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--rubrique);animation:pouls 1.2s ease-in-out infinite}
@@ -149,7 +155,7 @@ button{cursor:pointer}
 #fiche h1{font-family:var(--titre);font-weight:700;font-size:clamp(26px,6vw,38px);line-height:1.08;margin:14px 0 0;letter-spacing:-.015em;overflow-wrap:anywhere}
 #f-sous{font-family:var(--titre);font-style:italic;font-size:18px;margin:4px 0 0}
 #f-etat{margin:14px 0 0;font-size:16px}
-#b-voir{margin:14px 0 0}
+
 #fiche section{margin:26px 0 0;padding-top:14px;border-top:1px solid var(--encre)}
 #fiche h2{font-family:var(--titre);font-weight:700;font-size:19px;margin:0 0 4px}
 #fiche section p{margin:0 0 12px;color:var(--gris);font-size:15px;max-width:60ch}
@@ -183,8 +189,9 @@ button{cursor:pointer}
 .pg.pause li i{background:var(--pale)}
 #progres{margin:18px 0 0}
 #p-texte{margin:0;font-size:15px;color:var(--gris)}
-#provisoire .pg{margin:8px 0 2px;font-size:13px}
-#fiche #b-silence{margin:16px 0 0}
+#provisoire .pg{margin:8px 0 2px;font-size:13px;min-height:6px}
+#f-boutons{margin:14px 0 0}
+#f-boutons>[hidden]{display:inline-block!important;visibility:hidden}     /* un bouton absent garde sa place : rien ne bouge sous le doigt */
 #etapes{display:flex;list-style:none;margin:0 0 14px;padding:0;font-size:14px;color:var(--pale)}
 #etapes li{flex:1;border-top:3px solid var(--filet);padding:6px 6px 0 0}
 #etapes li.passe{border-color:var(--encre);color:var(--encre)}
@@ -332,8 +339,7 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
     <button class="lien" id="b-changer">Changer de playlist</button>
     <button class="lien" id="b-eleves" hidden>Élèves</button>
     <button class="lien" id="b-cle">Clé d'accès</button></div></header>
-  <div id="suivi" role="status"></div>
-  <div id="encours"></div>
+  <div id="bas"><div id="suivi" role="status"></div><div id="encours"></div></div>
   <section id="changer" hidden>
     <h2>Mes playlists</h2>
     <div id="playlists-connues"></div>
@@ -378,11 +384,11 @@ body[data-h=surligneurs] .tete h1,body[data-h=surligneurs] #fiche h1{display:inl
   <button class="lien retour" id="b-retour">← Playlist</button>
   <h1 id="f-h"></h1>
   <p id="f-sous"></p>
+  <div class="boutons" id="f-boutons"><button class="plein" id="b-voir" hidden>Ouvrir la partition</button>
+  <button class="creux" id="b-silence" hidden>Refaire l'analyse</button></div>
   <p id="f-etat"></p>
-  <button class="plein" id="b-voir" hidden>Ouvrir la partition</button>
   <p id="message" role="status"></p>
   <section id="progres" hidden><ol class="pg"></ol><p id="p-texte"></p></section>
-  <button class="creux" id="b-silence" hidden>Refaire l'analyse</button>
   <section id="zone-ecoute" hidden>
     <h2>Écouter le titre</h2>
     <p>Le titre s'ouvre dans YouTube Music. Lance la lecture et laisse-le jouer jusqu'au bout, sans autre son sur l'ordinateur. Seule la partition est gardée.</p>
@@ -636,6 +642,7 @@ function afficher(){
   bandeau.hidden = !pv;
   if (pv) bandeau.textContent = "Première version : les accords et les paroles s'affinent encore" + (typeof surveiller === "function" ? ", cette page se met à jour toute seule." : ".");
   if (pv && typeof relanceBandeau === "function") relanceBandeau(bandeau, t);
+  if (pv && typeof majProgres === "function" && !bandeau.querySelector(".pg")) bandeau.append(el("ol", "pg"));
   grille.replaceChildren(); grille.style.width = impression ? "690px" : "";
   const largeur = (impression ? 690 : grille.clientWidth - 12), haut = grille.getBoundingClientRect().top + scrollY;
   const choix = choisir(t, largeur, impression ? 930 : Math.max(120, innerHeight - haut - 4));
@@ -1240,6 +1247,8 @@ $("b-eleve-ok").onclick = async () => {
 $("b-retour").onclick = () => { vue("appli"); dessinerListe(); };
 $("f-artiste").oninput = $("f-titre").oninput = majFiche;
 $("b-voir").onclick = () => voirPartition("fiche");
+if (window.ResizeObserver){ const bas = $("bas"), app = $("appli");
+  new ResizeObserver(() => { app.style.paddingBottom = (48 + bas.offsetHeight) + "px"; }).observe(bas); }
 $("b-silence").onclick = () => {
   const b = $("b-silence");
   if (!b.dataset.zero) return demander();
