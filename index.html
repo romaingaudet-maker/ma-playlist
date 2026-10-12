@@ -106,6 +106,7 @@ button{cursor:pointer}
 #suivi{display:none;align-items:baseline;gap:9px;margin:12px 0 0;padding:9px 12px;border-left:3px solid var(--rubrique);background:var(--voile);font-size:15px}
 #suivi.actif{display:flex}
 #encours:empty{display:none}
+#liste h2.autres{margin:22px 0 4px;font-size:15px;font-weight:400;color:var(--pale);text-transform:none}
 #encours{margin:10px 0 0}
 /* Ce qui arrive après coup (analyses en cours, suivi) vit dans un bandeau fixé en bas de l'écran : rien ne se décale
    sous le doigt quand il apparaît. */
@@ -852,7 +853,29 @@ function dessinerListe(){
     l.onclick = () => ouvrirTitre(t, true);
     liste.append(l);
   }
-  if (playlist.length && !n) liste.append(el("p", null, pretes && !$("filtre").value ? "Aucune partition prête pour l'instant : choisis un titre pour lancer son analyse." : "Aucun titre ne correspond."));
+  /* La recherche porte aussi sur les autres playlists connues : leurs titres qui correspondent viennent à la suite. */
+  let m = 0;
+  if ($("filtre").value && !ELEVE){
+    if (!autres) chargerAutres();
+    else {
+      const ici = new Set(playlist.map(t => idDe(t.artiste, t.titre))), trouves = [];
+      for (const t of autres){
+        if (ici.has(t.id) || !identifiant(t.artiste + " " + t.titre).includes(q)) continue;
+        const e = etatDe(t); if (pretes && !(e && (e[0] === "partition" || e[0] === "extrait" || e[0] === "provisoire"))) continue;
+        if (trouves.push(t) >= 100) break;
+      }
+      if (trouves.length) liste.append(el("h2", "autres", "Dans vos autres playlists"));
+      for (const t of trouves){
+        const e = etatDe(t), l = el("button", "ligne"), txt = el("span", "t"); txt.append(el("b", null, t.titre), el("span", null, t.artiste + " · " + t.ou));
+        l.append(txt); if (e) l.append(el("span", "etat " + e[2], e[1]));
+        if (t.duree) l.append(el("span", "d", duree(t.duree)));
+        l.onclick = () => ouvrirTitre(t, true);
+        liste.append(l); m++;
+      }
+    }
+  }
+  if (playlist.length && !n && !m) liste.append(el("p", null, pretes && !$("filtre").value ? "Aucune partition prête pour l'instant : choisis un titre pour lancer son analyse."
+      : !$("filtre").value || autres || ELEVE ? "Aucun titre ne correspond." : "Recherche dans vos autres playlists…"));
   $("compte").textContent = playlist.length ? playlist.length + " titres, dont " + faits + (faits > 1 ? " avec partition complète" : " avec partition complète")
       + (n > 400 ? ". Les 400 premiers sont affichés, affine la recherche." : "")
     : ELEVE ? "Aucune playlist pour l'instant : touche « Changer de playlist » et colle le lien de la tienne."
@@ -1100,6 +1123,22 @@ async function charger(avecSuivi = true){
 }
 
 $("filtre").oninput = $("f-pretes").onchange = dessinerListe;
+if (!ELEVE) $("filtre").placeholder = "Chercher un titre ou un artiste, dans toutes les playlists";
+/* Titres des autres playlists connues (copies gardées à chaque lecture), chargés à la première recherche. */
+let autres = null, autresEnCours = false;
+async function chargerAutres(){
+  if (autres || autresEnCours) return; autresEnCours = true;
+  try {
+    const connues = (await fichierJson("playlists.json")) || [];
+    const lues = await Promise.all(connues.map(c => fichierJson("playlists/" + c.liste + ".json").then(p => ({c, p})).catch(() => null)));
+    const vus = new Set(); autres = [];
+    for (const x of lues) if (x && x.p) for (const t of (x.p.titres || [])){
+      const id = idDe(t.artiste, t.titre); if (vus.has(id)) continue; vus.add(id);
+      autres.push({...t, id, ou: (x.c.nom || "").trim() || "autre playlist"});
+    }
+  } catch (e) { autres = []; }
+  autresEnCours = false; dessinerListe();
+}
 $("b-cle").onclick = () => { $("connexion").hidden = !$("connexion").hidden; if (!$("connexion").hidden) $("cle").focus(); };
 $("b-cle-ok").onclick = () => { ecrire("cle", $("cle").value.trim()); $("cle").value = ""; charger(); };
 $("b-playlist").onclick = async () => {
