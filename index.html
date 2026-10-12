@@ -640,6 +640,7 @@ function enTete(t){
   if (t.paroles && t.paroles.source === "transcription") ligne("Paroles", "transcrites à l'oreille, des mots peuvent être faux");
   if (fiche.children.length) tete.append(fiche);
   const choix = choixGrille(TITRES[courant] || t); if (choix) tete.append(choix);
+  if (typeof notation === "function"){ const n = notation(TITRES[courant] || t); if (n) tete.append(n); }
 }
 
 /* Grilles au choix : la partition peut porter, en plus de nos accords, ceux des grilles publiées en ligne, calés sur
@@ -1034,6 +1035,41 @@ async function repartir(){
     remis[id] = Date.now(); delete bilan[id]; oublierRemis();
   } catch (e) { dire("La remise à zéro a échoué : " + e.message, true); return; }
   await demander();
+}
+
+/* Note sur 10 de la version affichée (notre analyse ou l'une des grilles) : gardée sur le téléphone et envoyée dans
+   avis/<titre>.json, pour savoir quelle source vaut le mieux, titre par titre. */
+let mesNotes = {}; try { mesNotes = JSON.parse(localStorage.getItem("partitions.notes") || "{}"); } catch (e) {}
+function sourceAffichee(t){ const v = t.variantes_accords, k = grilleChoisie[t.id]; return v && k != null && k >= 0 && v[k] ? "grille " + v[k].nom : "notre analyse"; }
+function notation(t){
+  if (ELEVE) return null;
+  const source = sourceAffichee(t), cle = t.id + "|" + source;
+  const l = el("label", "choix-grille", "Ta note pour cette version : "), s = el("select"), etat = el("span", "note-etat");
+  for (const v of ["", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]){ const o = el("option", null, v === "" ? "–" : v + " / 10"); o.value = v; o.selected = String(mesNotes[cle] ?? "") === String(v); s.append(o); }
+  s.onchange = async () => {
+    if (s.value === "") return;
+    mesNotes[cle] = +s.value; try { localStorage.setItem("partitions.notes", JSON.stringify(mesNotes)); } catch (e) {}
+    etat.textContent = " enregistrement…";
+    try { await envoyerNote(t, source, +s.value); etat.textContent = " ✓"; }
+    catch (e) { etat.textContent = " gardée sur ce téléphone seulement (" + e.message + ")"; }
+  };
+  l.append(s, etat); return l;
+}
+async function envoyerNote(t, source, note){
+  const chemin = "/contents/avis/" + encodeURIComponent(t.id + ".json");
+  for (let essai = 0; essai < 3; essai++){
+    const r = await api(chemin + "?ref=" + BRANCHE, {cache: "no-store"});
+    let avis = {titre: t.titre, artiste: t.artiste, notes: {}}, sha;
+    if (r.ok){ const j = await r.json(); sha = j.sha; try { avis = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, ""))))); } catch (e) {} }
+    avis.notes = avis.notes || {};
+    avis.notes[source] = {note, le: new Date().toISOString(), version: t.provisoire ? t.provisoire.etape : "complète"};
+    const corps = {message: "Note " + note + "/10 : " + t.artiste + " - " + t.titre + " (" + source + ")", branch: BRANCHE,
+                   content: enBase64(new TextEncoder().encode(JSON.stringify(avis, null, 1))), ...(sha ? {sha} : {})};
+    const x = await api(chemin, {method: "PUT", body: JSON.stringify(corps)});
+    if (x.ok) return;
+    if (x.status !== 409 && x.status !== 422) throw new Error("GitHub a répondu " + x.status);
+  }
+  throw new Error("conflit répété");
 }
 
 async function demander(){
