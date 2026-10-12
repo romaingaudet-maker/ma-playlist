@@ -304,7 +304,6 @@ body[data-h=surligneurs] #entete .artiste{font-family:var(--accords);font-size:c
 body[data-h=surligneurs] #entete .fiche{font-size:16.5px}
 body[data-h=surligneurs] .accord{padding:0 .26em;margin-left:-.1em;background:linear-gradient(transparent 22%,hsl(var(--t,55) 100% 78%) 22% 90%,transparent 90%);border-radius:3px 6px 4px 7px}
 body[data-h=surligneurs] .accord.rappel{background:none}
-#grille .accord.ana{color:var(--pale);font-style:italic}
 body[data-h=surligneurs] .accord[data-r="0"]{--t:55}body[data-h=surligneurs] .accord[data-r="7"]{--t:90}body[data-h=surligneurs] .accord[data-r="2"]{--t:150}
 body[data-h=surligneurs] .accord[data-r="9"]{--t:185}body[data-h=surligneurs] .accord[data-r="4"]{--t:25}body[data-h=surligneurs] .accord[data-r="11"]{--t:330}
 body[data-h=surligneurs] .accord[data-r="6"]{--t:285}body[data-h=surligneurs] .accord[data-r="1"]{--t:210}body[data-h=surligneurs] .accord[data-r="8"]{--t:120}
@@ -743,7 +742,7 @@ function afficher(){
   $("legende").textContent = "Sur la ligne de pulsations, le grand trait ouvre la mesure, " + (S.m.marque === "points" ? "le point" : "le trait moyen") + " marque le temps, le petit trait le "
     + fraction + " ; chaque mot commence à son repère. Toutes les lignes comptent le même nombre de mesures. Entre parenthèses, l'accord en cours rappelé en début de ligne. Do/Sol : accord de Do avec Sol à la basse."
     + (reperes ? " Un mot ou un accord souligné est incertain." : "")
-    + (t.grilleChoisie ? " " + detailGrille(TITRES[courant] || t) + " Accords en gris : passages que la grille ne couvre pas (intro, solos…), complétés par notre analyse." : "");
+    + (t.grilleChoisie ? " " + detailGrille(TITRES[courant] || t) + " Là où la grille ne dit rien (intro, solos…), les accords sont ceux de notre analyse." : "");
   $("t-val").textContent = transpo === 0 ? "ton réel" : (transpo > 0 ? "+" : "−") + Math.abs(transpo) + " ½ ton";
   const liste = $("choix-titre"); if (liste) liste.value = courant;
 }
