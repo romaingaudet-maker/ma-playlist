@@ -70,6 +70,9 @@ button{cursor:pointer}
 #entete dt{color:var(--gris)}
 #entete dd{margin:0;font-weight:600}
 #grille{padding:2px 8px 0 4px}
+.choix-grille{display:block;margin:8px 0 0;font-size:15px}
+.choix-grille select{font:inherit;padding:4px 6px;max-width:100%}
+@media print{.choix-grille{display:none}}
 .rangee{position:relative;width:100%;break-inside:avoid;overflow-x:clip}
 #grille{overflow-x:clip}
 .num{position:absolute;left:0;font-family:var(--titre);font-style:italic;font-size:10px;line-height:1;color:var(--gris);text-align:right}
@@ -636,10 +639,31 @@ function enTete(t){
   if (!t.complet && p && p.debut_extrait_dans_morceau != null) ligne("Extrait", "à partir de " + duree(p.debut_extrait_dans_morceau));
   if (t.paroles && t.paroles.source === "transcription") ligne("Paroles", "transcrites à l'oreille, des mots peuvent être faux");
   if (fiche.children.length) tete.append(fiche);
+  const choix = choixGrille(TITRES[courant] || t); if (choix) tete.append(choix);
 }
 
+/* Grilles au choix : la partition peut porter, en plus de nos accords, ceux des grilles publiées en ligne, calés sur
+   les paroles (variantes_accords). Celle qu'on choisit remplace nos accords à l'affichage ; le choix est gardé par titre. */
+let grilleChoisie = {}; try { grilleChoisie = JSON.parse(localStorage.getItem("partitions.grilles") || "{}"); } catch (e) {}
+function avecGrille(t){
+  const v = t.variantes_accords, k = grilleChoisie[t.id];
+  if (!v || !v.length || k == null || k < 0 || !v[k]) return t;
+  const copie = JSON.parse(JSON.stringify(t)), ch = new Map(v[k].changements.map(c => [c[0], c]));
+  let i = 0;
+  for (const m of copie.mesures) for (const c of m.temps){ const x = ch.get(i++); c.accord = x ? {r: x[1], q: x[2], conf: 1, ...(x[3] >= 0 ? {b: x[3]} : {})} : null; }
+  return copie;
+}
+function choixGrille(t){
+  const v = t.variantes_accords; if (!v || !v.length) return null;
+  const l = el("label", "choix-grille", "Accords : "), s = el("select");
+  const option = (val, nom) => { const o = el("option", null, nom); o.value = val; o.selected = (grilleChoisie[t.id] ?? -1) == val; s.append(o); };
+  option(-1, "notre analyse");
+  v.forEach((g, k) => option(k, "grille " + g.nom));
+  s.onchange = () => { grilleChoisie[t.id] = +s.value; try { localStorage.setItem("partitions.grilles", JSON.stringify(grilleChoisie)); } catch (e) {} afficher(); };
+  l.append(s); return l;
+}
 function afficher(){
-  const t = TITRES[courant], grille = $("grille"), NS = "http://www.w3.org/2000/svg";
+  const t = avecGrille(TITRES[courant]), grille = $("grille"), NS = "http://www.w3.org/2000/svg";
   enTete(t);
   const pv = t.provisoire, bandeau = $("provisoire");
   bandeau.hidden = !pv;
