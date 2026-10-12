@@ -304,6 +304,7 @@ body[data-h=surligneurs] #entete .artiste{font-family:var(--accords);font-size:c
 body[data-h=surligneurs] #entete .fiche{font-size:16.5px}
 body[data-h=surligneurs] .accord{padding:0 .26em;margin-left:-.1em;background:linear-gradient(transparent 22%,hsl(var(--t,55) 100% 78%) 22% 90%,transparent 90%);border-radius:3px 6px 4px 7px}
 body[data-h=surligneurs] .accord.rappel{background:none}
+#grille .accord.ana{color:var(--pale);font-style:italic}
 body[data-h=surligneurs] .accord[data-r="0"]{--t:55}body[data-h=surligneurs] .accord[data-r="7"]{--t:90}body[data-h=surligneurs] .accord[data-r="2"]{--t:150}
 body[data-h=surligneurs] .accord[data-r="9"]{--t:185}body[data-h=surligneurs] .accord[data-r="4"]{--t:25}body[data-h=surligneurs] .accord[data-r="11"]{--t:330}
 body[data-h=surligneurs] .accord[data-r="6"]{--t:285}body[data-h=surligneurs] .accord[data-r="1"]{--t:210}body[data-h=surligneurs] .accord[data-r="8"]{--t:120}
@@ -524,7 +525,7 @@ function aPlat(t){
     }
     if (tp.accord){
       const nom = ecritAccord(tp.accord, t);
-      if (nom !== dernier){ enCours = {html: nom, pc: mod(tp.accord.r + transpo, 12)}; cases[base].accord = {...enCours, doute: tp.accord.conf < 0.5, u: unite(nom, "accord")}; dernier = nom; }
+      if (nom !== dernier){ enCours = {html: nom, pc: mod(tp.accord.r + transpo, 12)}; cases[base].accord = {...enCours, doute: tp.accord.conf < 0.5, ana: !!tp.accord.ana, u: unite(nom, "accord")}; dernier = nom; }
     }
     for (let k = 0; k < sub; k++) cases[base + k].enCours = enCours;
   });
@@ -543,7 +544,7 @@ function composer(plat, a, b, largeur, f, sub, mesure, pas){
   for (let i = a; i < b; i++){
     for (const w of cases[i].mots) r.mots.push({txt: w.txt, doute: w.doute, a: (w.g - a) * pas, w: w.u * f, e: f * (w.vers ? S.ecartVers : S.ecartMot)});
     const c = cases[i].accord;
-    if (c) r.accords.push({html: c.html, pc: c.pc, doute: c.doute, a: (i - a) * pas, w: c.u * f * S.accord, e: f * S.ecartAccord});
+    if (c) r.accords.push({html: c.html, pc: c.pc, doute: c.doute, ana: c.ana, a: (i - a) * pas, w: c.u * f * S.accord, e: f * S.ecartAccord});
   }
   const rappel = a > 0 && !cases[a].accord && cases[a - 1].enCours;
   if (rappel){ const html = "(" + rappel.html + ")"; r.accords.unshift({html, pc: rappel.pc, rappel: true, a: 0, w: unite(html, "accord rappel") * f * S.accord, e: 0}); }
@@ -651,7 +652,8 @@ function avecGrille(t){
   if (!v || !v.length || k == null || k < 0 || !v[k]) return t;
   const copie = JSON.parse(JSON.stringify(t)), ch = new Map(v[k].changements.map(c => [c[0], c]));
   let i = 0;
-  for (const m of copie.mesures) for (const c of m.temps){ const x = ch.get(i++); c.accord = x ? {r: x[1], q: x[2], conf: 1, ...(x[3] >= 0 ? {b: x[3]} : {})} : null; }
+  for (const m of copie.mesures) for (const c of m.temps){ const x = ch.get(i++); c.accord = x ? {r: x[1], q: x[2], conf: 1, ...(x[3] >= 0 ? {b: x[3]} : {}), ...(x[4] ? {ana: 1} : {})} : null; }
+  copie.grilleChoisie = v[k];
   return copie;
 }
 function choixGrille(t){
@@ -659,7 +661,7 @@ function choixGrille(t){
   const l = el("label", "choix-grille", "Accords : "), s = el("select");
   const option = (val, nom) => { const o = el("option", null, nom); o.value = val; o.selected = (grilleChoisie[t.id] ?? -1) == val; s.append(o); };
   option(-1, "notre analyse");
-  v.forEach((g, k) => option(k, "grille " + g.nom));
+  v.forEach((g, k) => option(k, "grille " + g.nom + (g.transposition ? " (écrite " + (Math.abs(g.transposition) === 1 ? "un demi-ton" : Math.abs(g.transposition) + " demi-tons") + " plus " + (g.transposition > 0 ? "bas" : "haut") + ")" : "")));
   s.onchange = () => { grilleChoisie[t.id] = +s.value; try { localStorage.setItem("partitions.grilles", JSON.stringify(grilleChoisie)); } catch (e) {} afficher(); };
   l.append(s); return l;
 }
@@ -696,7 +698,7 @@ function afficher(){
     pulsations({svg, cases, L, H: S.regle, pas, ferme: r.ferme, fin: r === fin && t.complet, n: r.debut});
     rg.append(svg);
     for (const o of r.accords){
-      const a = el("span", "accord" + (o.rappel ? " rappel" : o.doute && reperes ? " doute" : "")); a.innerHTML = o.html;
+      const a = el("span", "accord" + (o.rappel ? " rappel" : o.doute && reperes ? " doute" : "") + (o.ana ? " ana" : "")); a.innerHTML = o.html;
       a.style.cssText = "left:" + (MARGE + o.x) + "px;top:" + (hm + S.regle + S.basAccord) + "px;font-size:" + (f * S.accord) + "px"; if (o.pc != null) a.dataset.r = o.pc; rg.append(a);
     }
     grille.append(rg);
@@ -713,7 +715,8 @@ function afficher(){
   const fraction = plan.sub === 3 ? "tiers de temps" : plan.sub === 4 ? "quart de temps" : "demi-temps";
   $("legende").textContent = "Sur la ligne de pulsations, le grand trait ouvre la mesure, " + (S.m.marque === "points" ? "le point" : "le trait moyen") + " marque le temps, le petit trait le "
     + fraction + " ; chaque mot commence à son repère. Toutes les lignes comptent le même nombre de mesures. Entre parenthèses, l'accord en cours rappelé en début de ligne. Do/Sol : accord de Do avec Sol à la basse."
-    + (reperes ? " Un mot ou un accord souligné est incertain." : "");
+    + (reperes ? " Un mot ou un accord souligné est incertain." : "")
+    + (t.grilleChoisie ? " Accords en gris : passages que la grille ne couvre pas (intro, solos…), complétés par notre analyse." : "");
   $("t-val").textContent = transpo === 0 ? "ton réel" : (transpo > 0 ? "+" : "−") + Math.abs(transpo) + " ½ ton";
   const liste = $("choix-titre"); if (liste) liste.value = courant;
 }
