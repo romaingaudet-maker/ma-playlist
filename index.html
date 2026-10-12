@@ -647,8 +647,18 @@ function enTete(t){
 /* Grilles au choix : la partition peut porter, en plus de nos accords, ceux des grilles publiées en ligne, calés sur
    les paroles (variantes_accords). Celle qu'on choisit remplace nos accords à l'affichage ; le choix est gardé par titre. */
 let grilleChoisie = {}; try { grilleChoisie = JSON.parse(localStorage.getItem("partitions.grilles") || "{}"); } catch (e) {}
+/* Le choix est gardé par nom de grille (les grilles en double sont fusionnées, leur rang peut changer) ; une grille
+   fusionnée reste retrouvée par l'un de ses sites. */
+function indiceGrille(t){
+  const v = t.variantes_accords, c = grilleChoisie[t.id];
+  if (!v || typeof c !== "string") return -1;
+  const sites = n => n.split(/ : |, /);
+  let k = v.findIndex(g => g.nom === c);
+  if (k < 0) k = v.findIndex(g => sites(g.nom).some(x => sites(c).includes(x)));
+  return k;
+}
 function avecGrille(t){
-  const v = t.variantes_accords, k = grilleChoisie[t.id];
+  const v = t.variantes_accords, k = indiceGrille(t);
   if (!v || !v.length || k == null || k < 0 || !v[k]) return t;
   const copie = JSON.parse(JSON.stringify(t)), ch = new Map(v[k].changements.map(c => [c[0], c]));
   let i = 0;
@@ -659,10 +669,10 @@ function avecGrille(t){
 function choixGrille(t){
   const v = t.variantes_accords; if (!v || !v.length) return null;
   const l = el("label", "choix-grille", "Accords : "), s = el("select");
-  const option = (val, nom) => { const o = el("option", null, nom); o.value = val; o.selected = (grilleChoisie[t.id] ?? -1) == val; s.append(o); };
+  const option = (val, nom) => { const o = el("option", null, nom); o.value = val; o.selected = indiceGrille(t) == val; s.append(o); };
   option(-1, "notre analyse");
   v.forEach((g, k) => option(k, "grille " + g.nom + (g.transposition ? " (écrite " + (Math.abs(g.transposition) === 1 ? "un demi-ton" : Math.abs(g.transposition) + " demi-tons") + " plus " + (g.transposition > 0 ? "bas" : "haut") + ")" : "")));
-  s.onchange = () => { grilleChoisie[t.id] = +s.value; try { localStorage.setItem("partitions.grilles", JSON.stringify(grilleChoisie)); } catch (e) {} afficher(); };
+  s.onchange = () => { if (+s.value >= 0) grilleChoisie[t.id] = v[+s.value].nom; else delete grilleChoisie[t.id]; try { localStorage.setItem("partitions.grilles", JSON.stringify(grilleChoisie)); } catch (e) {} afficher(); };
   l.append(s); return l;
 }
 function afficher(){
@@ -1043,7 +1053,7 @@ async function repartir(){
 /* Note sur 10 de la version affichée (notre analyse ou l'une des grilles) : gardée sur le téléphone et envoyée dans
    avis/<titre>.json, pour savoir quelle source vaut le mieux, titre par titre. */
 let mesNotes = {}; try { mesNotes = JSON.parse(localStorage.getItem("partitions.notes") || "{}"); } catch (e) {}
-function sourceAffichee(t){ const v = t.variantes_accords, k = grilleChoisie[t.id]; return v && k != null && k >= 0 && v[k] ? "grille " + v[k].nom : "notre analyse"; }
+function sourceAffichee(t){ const v = t.variantes_accords, k = indiceGrille(t); return v && k != null && k >= 0 && v[k] ? "grille " + v[k].nom : "notre analyse"; }
 function notation(t){
   if (ELEVE) return null;
   const source = sourceAffichee(t), cle = t.id + "|" + source;
