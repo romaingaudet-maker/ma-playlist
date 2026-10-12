@@ -46,6 +46,7 @@ button{cursor:pointer}
 #b-lecture{position:fixed;right:14px;bottom:14px;z-index:5;width:58px;height:58px;border-radius:50%;border:2px solid var(--encre);
   background:var(--papier);color:var(--encre);font-size:24px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 #b-lecture[aria-pressed=true]{background:var(--encre);color:var(--papier)}
+#nouvelle{position:fixed;left:14px;bottom:20px;z-index:5;padding:10px 14px;border:1px solid var(--rubrique);border-radius:22px;background:var(--papier);color:var(--rubrique);font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 #outils>*{flex:none}
 .outil{border:0;background:none;padding:7px 8px;font-size:15px;border-radius:4px;line-height:1.2;white-space:nowrap}
 .outil:hover{background:var(--voile)}
@@ -84,7 +85,7 @@ button{cursor:pointer}
 #vide{padding:40px 14px;font-size:17px}
 @page{size:A4;margin:14mm 13mm}
 @media print{
-  #outils,#reglages,#appli,#fiche,#legende,#b-lecture,.curseur{display:none!important}
+  #outils,#reglages,#appli,#fiche,#legende,#b-lecture,.curseur,#nouvelle{display:none!important}
   #entete{padding:0 0 10px}
   #entete h1{font-size:26px}
   #entete .artiste{font-size:16px}
@@ -883,7 +884,20 @@ function dessinerListe(){
     : lire("cle") ? "Playlist pas encore lue : touche « Relire la playlist », puis patiente une minute." : "";
 }
 
-function vue(nom){ if (lecture.joue) arreter(); for (const v of ["appli", "fiche", "vue-partition"]) $(v).hidden = v !== nom; scrollTo(0, 0); }
+function vue(nom, depuisHistorique){
+  if (lecture.joue) arreter();
+  if (nom !== "vue-partition"){ const z = $("nouvelle"); if (z) z.remove(); versionEnAttente = null; }
+  /* Le bouton « retour » du téléphone ramène à la playlist : une seule étape d'historique pour toute page ouverte
+     depuis elle ; un second appui quitte l'appli comme d'habitude. */
+  if (!depuisHistorique && history.pushState){
+    const ici = history.state && history.state.vue;
+    if (nom === "appli"){ if (ici && ici !== "appli") history.back(); }
+    else if (ici && ici !== "appli") history.replaceState({vue: nom}, "");
+    else history.pushState({vue: nom}, "");
+  }
+  for (const v of ["appli", "fiche", "vue-partition"]) $(v).hidden = v !== nom; scrollTo(0, 0);
+}
+addEventListener("popstate", e => { if (!(e.state && e.state.vue && e.state.vue !== "appli")){ vue("appli", true); dessinerListe(); } });
 function dire(texte, alerte){ const m = $("message"); m.textContent = texte; m.classList.toggle("alerte", !!alerte);
   if ($("fiche").hidden && texte){ const z = $("suivi"); z.textContent = texte; z.classList.add("actif"); z.classList.remove("vivant"); } }
 function choisir_(t){ choisi = t; $("f-artiste").value = t.artiste; $("f-titre").value = t.titre; $("noms").open = false; dire(""); majFiche(); }
@@ -1022,6 +1036,18 @@ async function voirPartition(depuis){
   } catch (e) { dire("Impossible d'ouvrir la partition : " + e.message, true); }
 }
 
+/* Une version plus avancée arrivée pendant la lecture attend qu'on la demande (ou la fin de la lecture). */
+let versionEnAttente = null;
+function remplacer(d){
+  versionEnAttente = null; const z = $("nouvelle"); if (z) z.remove();
+  TITRES = [d]; afficher(); if (!d.provisoire) charger(false);
+}
+function proposerVersion(d){
+  versionEnAttente = d; if ($("nouvelle")) return;
+  const b = el("button", null, "Version affinée prête : l'afficher"); b.id = "nouvelle";
+  b.onclick = () => { if (versionEnAttente) remplacer(versionEnAttente); };
+  document.body.append(b);
+}
 /* Partition provisoire ouverte : on regarde toutes les 20 s si une version plus avancée est arrivée, et on
    l'affiche à la place, sans toucher à la transposition ni à la position dans la page. */
 let veillePartition = null;
@@ -1033,8 +1059,8 @@ function surveiller(id){
     try {
       const d = await fichierJson("resultats/" + id + ".json");
       if (d && d.etat === "ok" && JSON.stringify(d.provisoire || null) !== JSON.stringify(TITRES[0].provisoire || null)){
-        TITRES = [d]; afficher();
-        if (!d.provisoire) charger(false);
+        if (lecture.joue){ proposerVersion(d); surveiller(id); return; }     /* on ne change pas la partition sous les yeux de qui joue */
+        remplacer(d);
       }
     } catch (e) {}
     surveiller(id);
