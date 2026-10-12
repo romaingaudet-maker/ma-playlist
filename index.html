@@ -909,7 +909,7 @@ function majFiche(){
   if (c && c.remplace) $("f-etat").textContent += " L'analyse lit la version du disque, à la place " + (c.remplace === "live" ? "du concert" : "du clip, plus long,") + " de la playlist.";
   else if (c && c.version === "live") $("f-etat").textContent += " C'est une version de concert : aucune version du disque n'a été trouvée.";
   $("b-voir").hidden = !(b && b.etat === "ok");
-  $("b-silence").hidden = (!!pr && !pr.pause) || !e;         /* pendant une analyse, ou avant la première, pas de bouton ; en attente, on peut relancer */
+  $("b-silence").hidden = enRemise || (!!pr && !pr.pause) || !e;         /* pendant une analyse, ou avant la première, pas de bouton ; en attente, on peut relancer */
   $("b-silence").textContent = pr && pr.pause ? "Relancer maintenant" : e && e[0] === "echec" ? "Relancer l'analyse" : "Repartir de zéro";
   $("b-silence").dataset.zero = !(pr && pr.pause) && e && e[0] !== "echec" ? "1" : "";
   majProgres();
@@ -1246,10 +1246,13 @@ $("b-silence").onclick = () => {
   if (!b.dataset.zero) return demander();
   if (!b.dataset.sur){                                         /* deux appuis : on ne jette pas une partition par mégarde */
     b.dataset.sur = "1"; b.textContent = "Confirmer : tout refaire depuis le début";
-    setTimeout(() => { delete b.dataset.sur; majFiche(); }, 5000); return;
+    confirmation = setTimeout(() => { delete b.dataset.sur; majFiche(); }, 5000); return;
   }
-  delete b.dataset.sur; repartir();
+  clearTimeout(confirmation); delete b.dataset.sur;
+  enRemise = true; b.hidden = true;                            /* confirmé : le bouton disparaît aussitôt */
+  repartir().finally(() => { enRemise = false; majFiche(); });
 };
+let confirmation = null, enRemise = false;
 
 /* Écoute locale : proposée seulement quand la page est servie par le programme installé sur l'ordinateur. */
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
