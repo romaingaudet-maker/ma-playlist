@@ -910,7 +910,8 @@ function majFiche(){
   else if (c && c.version === "live") $("f-etat").textContent += " C'est une version de concert : aucune version du disque n'a été trouvée.";
   $("b-voir").hidden = !(b && b.etat === "ok");
   $("b-silence").hidden = (!!pr && !pr.pause) || !e;         /* pendant une analyse, ou avant la première, pas de bouton ; en attente, on peut relancer */
-  $("b-silence").textContent = pr && pr.pause ? "Relancer maintenant" : e && e[0] === "echec" ? "Relancer l'analyse" : "Refaire l'analyse";
+  $("b-silence").textContent = pr && pr.pause ? "Relancer maintenant" : e && e[0] === "echec" ? "Relancer l'analyse" : "Repartir de zéro";
+  $("b-silence").dataset.zero = !(pr && pr.pause) && e && e[0] !== "echec" ? "1" : "";
   majProgres();
 }
 
@@ -931,6 +932,35 @@ function enBase64(tampon){
   for (let i = 0; i < o.length; i += 0x8000) s += String.fromCharCode.apply(null, o.subarray(i, i + 0x8000));
   return btoa(s);
 }
+/* Repartir de zéro : la partition du titre est effacée, puis une analyse neuve est demandée ; tout est refait, de la
+   première version à la partition complète. Tant que la nouvelle analyse n'a pas commencé, l'ancien état du titre
+   (encore présent dans le bilan) est ignoré. */
+let remis = {}; try { remis = JSON.parse(localStorage.getItem("partitions.remis") || "{}"); } catch (e) {}
+function oublierRemis(){
+  for (const id of Object.keys(remis)){
+    const b = bilan[id];
+    if (!enAttente.has(id) && Date.now() - remis[id] > 120000){ delete remis[id]; continue; }     /* l'analyse neuve est finie */
+    if (b && !(b.analyse_debut && Date.parse(b.analyse_debut) >= remis[id] - 60000) && !(b.provisoire && b.provisoire.etape === "ebauche" && enAttente.has(id))) delete bilan[id];
+  }
+  try { localStorage.setItem("partitions.remis", JSON.stringify(remis)); } catch (e) {}
+}
+async function repartir(){
+  const artiste = $("f-artiste").value.trim(), titre = $("f-titre").value.trim(), id = idDe(artiste, titre);
+  if (!titre) return;
+  const chemin = "/contents/resultats/" + encodeURIComponent(id + ".json");
+  try {
+    dire("Remise à zéro…");
+    const r = await api(chemin + "?ref=" + BRANCHE, {cache: "no-store"});
+    if (r.ok){
+      const sha = (await r.json()).sha;
+      const x = await api(chemin, {method: "DELETE", body: JSON.stringify({message: "Remise à zéro : " + artiste + " - " + titre, sha, branch: BRANCHE})});
+      if (!x.ok && x.status !== 404) throw new Error("GitHub a répondu " + x.status);
+    }
+    remis[id] = Date.now(); delete bilan[id]; oublierRemis();
+  } catch (e) { dire("La remise à zéro a échoué : " + e.message, true); return; }
+  await demander();
+}
+
 async function demander(){
   const artiste = $("f-artiste").value.trim(), titre = $("f-titre").value.trim();
   if (!titre){ dire("Indique au moins le titre.", true); $("noms").open = true; return; }
@@ -1039,7 +1069,7 @@ async function rafraichir(){
     const neuf = {}; for (const b of (bi || [])) neuf[b.id] = b;
     const encore = new Set((Array.isArray(de) ? de : []).map(f => identifiant(f.name.replace(/\.[^.]+$/, ""))));
     if (attendu && enAttente.has(attendu) && !encore.has(attendu) && !(neuf[attendu] && neuf[attendu].etat === "ok")) encore.add(attendu);   /* demande tout juste envoyée, pas encore visible */
-    bilan = neuf; enAttente = encore;
+    bilan = neuf; enAttente = encore; oublierRemis();
     /* Les analyses tournent sur d'autres machines : chacune note son heure de départ dans le bilan en commençant. */
     analyses = Object.assign({}, enRoute);
     for (const id of enAttente){ const b = bilan[id]; if (b && b.analyse_debut && !analyses[id]) analyses[id] = {debut: Date.parse(b.analyse_debut), file: false}; }
@@ -1057,7 +1087,7 @@ async function charger(avecSuivi = true){
     if (playlistVoulue && pl && pl.adresse !== playlistVoulue){ /* relecture pas encore finie : on garde la copie affichée */ }
     else { playlist = pl && pl.titres ? pl.titres : []; playlistVoulue = null; }
     bilan = {}; for (const b of (bi || [])) bilan[b.id] = b;
-    enAttente = new Set([...(au || []).filter(f => !/\.md$/i.test(f.name)), ...(Array.isArray(de) ? de : [])].map(f => identifiant(f.name.replace(/\.[^.]+$/, ""))));
+    enAttente = new Set([...(au || []).filter(f => !/\.md$/i.test(f.name)), ...(Array.isArray(de) ? de : [])].map(f => identifiant(f.name.replace(/\.[^.]+$/, "")))); oublierRemis();
     $("connexion").hidden = true; dessinerListe(); if (!$("fiche").hidden) majFiche();
     if (avecSuivi) suivre(false);
   } catch (e) { $("compte").textContent = "Lecture du dépôt impossible : " + e.message; }
@@ -1211,7 +1241,15 @@ $("b-eleve-ok").onclick = async () => {
 $("b-retour").onclick = () => { vue("appli"); dessinerListe(); };
 $("f-artiste").oninput = $("f-titre").oninput = majFiche;
 $("b-voir").onclick = () => voirPartition("fiche");
-$("b-silence").onclick = demander;
+$("b-silence").onclick = () => {
+  const b = $("b-silence");
+  if (!b.dataset.zero) return demander();
+  if (!b.dataset.sur){                                         /* deux appuis : on ne jette pas une partition par mégarde */
+    b.dataset.sur = "1"; b.textContent = "Confirmer : tout refaire depuis le début";
+    setTimeout(() => { delete b.dataset.sur; majFiche(); }, 5000); return;
+  }
+  delete b.dataset.sur; repartir();
+};
 
 /* Écoute locale : proposée seulement quand la page est servie par le programme installé sur l'ordinateur. */
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
@@ -1242,7 +1280,7 @@ if (LOCAL) suivreEcoute();
 
 document.querySelector(".tete .actions").prepend(menuHabillage());
 const retour = el("button", "outil", "← Playlist"); retour.onclick = () => { vue("appli"); dessinerListe(); };
-function boutonsEnPlus(){ const b = el("button", null, "Refaire l'analyse de ce titre"); b.onclick = () => vue("fiche"); return [b]; }
+function boutonsEnPlus(){ const b = el("button", null, "Repartir de zéro pour ce titre"); b.onclick = () => vue("fiche"); return [b]; }
 $("outils").prepend(retour);
 vue("appli"); charger();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});   /* pour l'installation en appli */
