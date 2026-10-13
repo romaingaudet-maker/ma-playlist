@@ -670,15 +670,17 @@ function avecGrille(t){
 function sitesDe(g){ return g.nom.replace(/^majorité des grilles( : )?/, "").split(", ").filter(Boolean); }
 function nbSites(g){ return new Set(sitesDe(g).map(x => x.replace(/ \(\d+\)$/, ""))).size; }
 function nomsCourts(v){
-  const noms = new Map(), ordre = v.map((g, k) => k).filter(k => !v[k].nom.startsWith("majorité"))
+  const noms = new Map(), ordre = v.map((g, k) => k).filter(k => !v[k].nom.startsWith("majorité") && !v[k].nom.startsWith("grille test"))
     .sort((a, b) => nbSites(v[b]) - nbSites(v[a]) || a - b);
-  v.forEach((g, k) => { if (g.nom.startsWith("majorité")) noms.set(k, "Consensus"); });
+  v.forEach((g, k) => { if (g.nom.startsWith("majorité")) noms.set(k, "Consensus"); if (g.nom.startsWith("grille test")) noms.set(k, "Grille test"); });
   ordre.forEach((k, n) => { const x = nbSites(v[k]); noms.set(k, "Grille " + (n + 1) + (x > 1 ? " (" + x + " sites)" : "")); });
-  return {noms, ordre: [...v.keys()].filter(k => v[k].nom.startsWith("majorité")).concat(ordre)};
+  const devant = [...v.keys()].filter(k => v[k].nom.startsWith("grille test")).concat([...v.keys()].filter(k => v[k].nom.startsWith("majorité")));
+  return {noms, ordre: devant.concat(ordre)};
 }
 function detailGrille(t){
   const v = t.variantes_accords, k = indiceGrille(t); if (!v || k < 0) return "";
   const g = v[k], sites = sitesDe(g), tr = g.transposition;
+  if (g.nom.startsWith("grille test")) return "Grille test : consensus de " + (g.sites || []).length + " grilles de guitartabs.cc, remises dans le ton du disque (les grilles sans rapport ou qui ne sont pas des grilles d'accords sont écartées).";
   return nomsCourts(v).noms.get(k) + " : " + (g.nom.startsWith("majorité") ? "accords les plus fréquents parmi les sites" + (sites.length ? " (identique à " + sites.join(", ") + ")" : "") : sites.join(", "))
     + (tr ? ", écrite " + (Math.abs(tr) === 1 ? "un demi-ton" : Math.abs(tr) + " demi-tons") + " plus " + (tr > 0 ? "bas" : "haut") + " et remise dans le ton du disque" : "") + ".";
 }
