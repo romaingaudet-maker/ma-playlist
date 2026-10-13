@@ -680,7 +680,7 @@ function nomsCourts(v){
 function detailGrille(t){
   const v = t.variantes_accords, k = indiceGrille(t); if (!v || k < 0) return "";
   const g = v[k], sites = sitesDe(g), tr = g.transposition;
-  if (g.nom.startsWith("grille test")) return "Grille test : consensus de " + (g.sites || []).length + " grilles d'accords de guitartabs.cc, remises dans le ton du disque, accords posés sur les premiers temps, renversements ajoutés d'après les grilles qui en donnent.";
+  if (g.nom.startsWith("grille test")) return "Grille test : consensus de " + (g.sites || []).length + " grilles d'accords de guitartabs.cc, remises dans le ton du disque, changements d'accords sur les premiers temps sauf accords de passage confirmés, renversements ajoutés d'après les grilles qui en donnent.";
   return nomsCourts(v).noms.get(k) + " : " + (g.nom.startsWith("majorité") ? "accords les plus fréquents parmi les sites" + (sites.length ? " (identique à " + sites.join(", ") + ")" : "") : sites.join(", "))
     + (tr ? ", écrite " + (Math.abs(tr) === 1 ? "un demi-ton" : Math.abs(tr) + " demi-tons") + " plus " + (tr > 0 ? "bas" : "haut") + " et remise dans le ton du disque" : "") + ".";
 }
