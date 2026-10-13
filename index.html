@@ -304,6 +304,7 @@ body[data-h=surligneurs] #entete .artiste{font-family:var(--accords);font-size:c
 body[data-h=surligneurs] #entete .fiche{font-size:16.5px}
 body[data-h=surligneurs] .accord{padding:0 .26em;margin-left:-.1em;background:linear-gradient(transparent 22%,hsl(var(--t,55) 100% 78%) 22% 90%,transparent 90%);border-radius:3px 6px 4px 7px}
 body[data-h=surligneurs] .accord.rappel{background:none}
+.origine{font-size:.85em;margin-left:.4em}.origine a{color:inherit}
 body[data-h=surligneurs] .accord[data-r="0"]{--t:55}body[data-h=surligneurs] .accord[data-r="7"]{--t:90}body[data-h=surligneurs] .accord[data-r="2"]{--t:150}
 body[data-h=surligneurs] .accord[data-r="9"]{--t:185}body[data-h=surligneurs] .accord[data-r="4"]{--t:25}body[data-h=surligneurs] .accord[data-r="11"]{--t:330}
 body[data-h=surligneurs] .accord[data-r="6"]{--t:285}body[data-h=surligneurs] .accord[data-r="1"]{--t:210}body[data-h=surligneurs] .accord[data-r="8"]{--t:120}
@@ -691,7 +692,15 @@ function choixGrille(t){
   option(-1, "Analyse");
   for (const k of ordre) option(k, noms.get(k));
   s.onchange = () => { if (+s.value >= 0) grilleChoisie[t.id] = v[+s.value].nom; else delete grilleChoisie[t.id]; try { localStorage.setItem("partitions.grilles", JSON.stringify(grilleChoisie)); } catch (e) {} afficher(); };
-  l.append(s); return l;
+  l.append(s);
+  /* La grille d'origine, quand on connaît sa page : un lien pour l'ouvrir (et l'enregistrer) sur le site qui la publie. */
+  const k = indiceGrille(t), pages = k >= 0 ? (v[k].sites || []).filter(u => /^https:\/\//.test(u)) : [];
+  if (pages.length){
+    const box = el("span", "origine");
+    pages.forEach((u, x) => { const a = el("a", null, pages.length > 1 ? "grille d'origine " + (x + 1) : "grille d'origine"); a.href = u; a.target = "_blank"; a.rel = "noopener"; box.append(" ", a); });
+    const w = el("span"); w.append(l, box); return w;
+  }
+  return l;
 }
 function afficher(){
   const t = avecGrille(TITRES[courant]), grille = $("grille"), NS = "http://www.w3.org/2000/svg";
